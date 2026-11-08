@@ -27,6 +27,11 @@
 
 ## État en cours
 
-- 2026-11-08 : outil écrit et testé en local (données simulées). Dépôt public créé par l'utilisateur
-  (minutes Actions illimitées). À faire après le 1er jour : vérifier la détection des ventes
-  (indicateurs bruts), la charge (contrôles en retard), et ajuster `NICHES_TAUX` si besoin.
+- 2026-11-08 : outil en ligne sur `main`. 1er relevé réel OK (run #1) : 572 annonces lues, 561 nouvelles,
+  37 suivies, base sauvegardée dans la Release `donnees`. Seul échec : déploiement GitHub Pages (pas encore
+  activé par l'utilisateur → https://github.com/Geuks64/vinted-niches/settings/pages, Source « GitHub Actions »).
+- À faire après le 1er jour : vérifier la détection des ventes (onglet « Relevé » → indicateurs bruts : à quoi
+  ressemble une annonce vendue ?), la charge (contrôles en retard), et ajuster `NICHES_TAUX` si besoin.
+- Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
+- Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
+  `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).
