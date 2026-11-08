@@ -68,6 +68,34 @@ nav button {
 nav button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
 main { padding: 14px 16px 40px; max-width: 980px; margin: 0 auto; }
 section[hidden] { display: none; }
+/* Menu « Plus » (écrans secondaires) */
+#menu-plus { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 0 10px; }
+#menu-plus[hidden] { display: none; }
+#menu-plus .puce {
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--texte-2); background: var(--carte);
+  border: 1px solid var(--bord); border-radius: 99px; padding: 6px 12px; cursor: pointer;
+}
+#menu-plus .puce[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Opportunités */
+.intro { color: var(--texte-2); font-size: 14px; margin: 0 0 12px; }
+.opp { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+.opp-haut { display: flex; gap: 12px; align-items: center; }
+.opp-haut img { width: 64px; height: 84px; object-fit: cover; border-radius: 8px; background: var(--barre-fond); flex: none; }
+.opp-rang { font-size: 12px; font-weight: 700; color: var(--texte-3); }
+.opp-type { font-size: 18px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.opp-chemin { font-size: 12px; color: var(--texte-3); }
+.opp-vite { margin-top: 4px; font-size: 13.5px; font-weight: 600; color: var(--chaud); }
+.opp-vite.calme { color: var(--texte-2); }
+.opp-chiffres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0 2px; }
+.opp-chiffres div { background: var(--fond); border-radius: 10px; padding: 7px 8px; }
+.opp-chiffres span { display: block; font-size: 11.5px; color: var(--texte-2); }
+.opp-chiffres b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.opp-chiffres .achat { background: var(--bon-doux); }
+.opp-chiffres .achat b, .opp-chiffres .achat span { color: var(--bon); }
+.opp .chine-btn { width: 100%; margin: 8px 0 0; padding: 10px; font-size: 14px; }
+.opp .a-confirmer { display: inline-block; font-size: 11.5px; font-weight: 700; color: var(--texte-3);
+  background: var(--neutre-doux); border-radius: 99px; padding: 1px 8px; margin-left: 4px; }
 h2 { font-size: 16px; margin: 18px 0 8px; }
 
 /* Tuiles de chiffres clés */
@@ -199,26 +227,48 @@ th { color: var(--texte-2); font-weight: 600; }
 <header>
   <div class="ligne-titre">
     <h1>Niches Vinted</h1>
-    <div class="bascule" role="group" aria-label="Pays des vendeurs">
+  </div>
+  <div class="maj" id="maj">Chargement…</div>
+  <nav role="tablist">
+    <button role="tab" data-onglet="opportunites" aria-selected="true">💎 Opportunités</button>
+    <button role="tab" data-onglet="recherche" aria-selected="false">🔎 Recherche</button>
+    <button id="bouton-plus" type="button" aria-expanded="false">☰ Plus</button>
+  </nav>
+  <div id="menu-plus" hidden>
+    <button class="puce" role="tab" data-onglet="top" aria-selected="false">🔥 Top</button>
+    <button class="puce" role="tab" data-onglet="aimees" aria-selected="false">❤️ Plus aimées</button>
+    <button class="puce" role="tab" data-onglet="ventes" aria-selected="false">💰 Ventes</button>
+    <button class="puce" role="tab" data-onglet="details" aria-selected="false">Détails</button>
+    <button class="puce" role="tab" data-onglet="etat" aria-selected="false">Relevé</button>
+    <div class="bascule" role="group" aria-label="Vendeurs pris en compte (Top, Détails…)">
       <button data-vue="tous" aria-pressed="true">Europe</button>
       <button data-vue="fr" aria-pressed="false">France</button>
       <button data-vue="part" aria-pressed="false">Particuliers</button>
     </div>
   </div>
-  <div class="maj" id="maj">Chargement…</div>
-  <nav role="tablist">
-    <button role="tab" data-onglet="top" aria-selected="true">🔥 Top</button>
-    <button role="tab" data-onglet="aimees" aria-selected="false">❤️ Plus aimées</button>
-    <button role="tab" data-onglet="ventes" aria-selected="false">💰 Ventes</button>
-    <button role="tab" data-onglet="recherche" aria-selected="false">🔎 Recherche</button>
-    <button role="tab" data-onglet="details" aria-selected="false">Détails</button>
-    <button role="tab" data-onglet="etat" aria-selected="false">Relevé</button>
-  </nav>
 </header>
 
 <main>
+  <!-- ================= OPPORTUNITÉS ================= -->
+  <section id="opportunites">
+    <p class="intro">Les articles <b>neufs sans marque</b> qui se vendent le mieux sur Vinted, avec le prix
+      d'achat à ne pas dépasser pour gagner au moins 40 %.</p>
+    <div id="liste-opp"></div>
+    <details class="aide">
+      <summary>Comment c'est calculé ?</summary>
+      <p>L'outil suit en priorité les annonces <b>neuves sans marque</b> (celles qu'on trouve en Chine), puis
+      regarde lesquelles se vendent, en combien de temps et à quel prix. Les chiffres sont calculés par
+      <b>type d'article</b> (catégorie Vinted) ; les photos sont de <b>vraies annonces vendues</b>.</p>
+      <p><b>Prix de vente</b> = prix médian des ventes. <b>Achat max</b> = prix de vente − cotisations
+      (12,3 %) − emballage (0,50 €) − 40 % de marge. <b>Gain</b> = ce qu'il te reste par pièce si tu achètes à ce
+      prix (plus si tu achètes moins cher). Vérifie le vrai prix avec « Trouver en Chine ».</p>
+      <p>Classement prudent : les types avec peu d'annonces descendent. « ⏳ À confirmer » = moins de 30
+      annonces : le chiffre peut encore bouger.</p>
+    </details>
+  </section>
+
   <!-- ================= TOP DU MOMENT ================= -->
-  <section id="top">
+  <section id="top" hidden>
     <div class="tuiles" id="tuiles-top"></div>
     <div class="puces" id="puces-top" role="group" aria-label="Type">
       <button data-type="" aria-pressed="true">Tout</button>
@@ -382,12 +432,27 @@ let typeTop = "";
 // Ancien format de stats.json (avant les vues) : on le lit comme la vue « tous »
 const V = () => (S.vues ? (S.vues[vue] || S.vues.tous) : S);
 
-// ---------- onglets
-document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => {
-  document.querySelectorAll("nav button").forEach((x) => x.setAttribute("aria-selected", x === b));
-  document.querySelectorAll("main section").forEach((s) => s.hidden = s.id !== b.dataset.onglet);
-  memo("onglet", b.dataset.onglet);
+// ---------- onglets (2 principaux + menu « Plus » pour les écrans secondaires)
+const ongletsPlus = { top: "Top", aimees: "Plus aimées", ventes: "Ventes", details: "Détails", etat: "Relevé" };
+function ouvrirOnglet(nom) {
+  document.querySelectorAll("[data-onglet]").forEach((x) => x.setAttribute("aria-selected", x.dataset.onglet === nom));
+  document.querySelectorAll("main section").forEach((s) => s.hidden = s.id !== nom);
+  const plus = $("#bouton-plus");
+  plus.setAttribute("aria-selected", nom in ongletsPlus);
+  plus.textContent = nom in ongletsPlus ? `☰ ${ongletsPlus[nom]}` : "☰ Plus";
+  memo("ecran", nom);
+}
+document.querySelectorAll("[data-onglet]").forEach((b) => b.addEventListener("click", () => {
+  ouvrirOnglet(b.dataset.onglet);
+  fermerPlus();
+  window.scrollTo(0, 0);
 }));
+function fermerPlus() { $("#menu-plus").hidden = true; $("#bouton-plus").setAttribute("aria-expanded", "false"); }
+$("#bouton-plus").addEventListener("click", () => {
+  const ouvert = $("#menu-plus").hidden;
+  $("#menu-plus").hidden = !ouvert;
+  $("#bouton-plus").setAttribute("aria-expanded", String(ouvert));
+});
 // ---------- bascule Europe / France
 document.querySelectorAll(".bascule button").forEach((b) => b.addEventListener("click", () => {
   vue = b.dataset.vue; memo("vue", vue);
@@ -405,6 +470,53 @@ const videFr = () => vue === "fr" ? `<div class="vide">Le pays du vendeur n'appa
   lisibles par l'outil (vérifié le 08/11/2026) : ce filtre reste vide pour l'instant. Utilise « Europe ».</div>`
   : vue === "part" ? `<div class="vide">Pas encore assez d'annonces de particuliers identifiées (le type de vendeur
   n'est lu sur toutes les annonces que depuis peu). Repasse en « Europe » en attendant.</div>` : null;
+
+// ---------- Opportunités (toujours sur toutes les annonces : vue « tous »)
+function afficherOpportunites() {
+  const o = (S.vues ? S.vues.tous : S).opportunites;
+  if (!o) {
+    $("#liste-opp").innerHTML = `<div class="vide">⏳ Bientôt disponible : le prochain relevé calcule cet écran.</div>`;
+    return;
+  }
+  if (!o.liste.length) {
+    $("#liste-opp").innerHTML = `<div class="vide">⏳ <b>Collecte en cours.</b><br>
+      ${o.suivies + o.rattrapage} annonces neuves sans marque analysées, ${o.vendues} ventes repérées.<br>
+      Un type d'article apparaît ici dès qu'il a au moins ${S.reglages.n_min} annonces et 2 ventes :
+      compte 1 à 3 jours.</div>`;
+    return;
+  }
+  const moyen = o.taux_moyen;
+  $("#liste-opp").innerHTML = o.liste.map((x, i) => {
+    const ex = x.exemples || [];
+    const photo = ex.find((a) => a.miniature);
+    if (photo) ANNONCES.set(String(photo.id ?? photo.url), photo);
+    const chaud = moyen && x.taux >= 1.3 * moyen;
+    const vite = x.delai_h != null ? `se vend en ~${duree(x.delai_h)}` : `${fmt(x.taux, " %")} vendus en ${FEN[x.fenetre]}`;
+    const detail = x.delai_h != null ? ` · ${fmt(x.taux, " %")} vendus en ${FEN[x.fenetre]}` : "";
+    return `<div class="opp">
+      <div class="opp-haut">
+        ${photo ? `<img loading="lazy" src="${esc(photo.miniature)}" alt="">` : ""}
+        <div>
+          <div class="opp-rang">N° ${i + 1}${x.a_confirmer ? `<span class="a-confirmer">⏳ À confirmer</span>` : ""}</div>
+          <div class="opp-type">${esc(x.type)}</div>
+          <div class="opp-chemin">${esc(x.chemin)}</div>
+          <div class="opp-vite${chaud ? "" : " calme"}">${chaud ? "🔥 " : ""}${vite}</div>
+          ${detail ? `<div class="opp-chemin">${detail.slice(3)}</div>` : ""}
+        </div>
+      </div>
+      <div class="opp-chiffres">
+        <div><span>Se vend</span><b>${euros(x.prix_vendu)}</b></div>
+        <div class="achat"><span>Achat max</span><b>${euros(x.achat_max)}</b></div>
+        <div><span>Gain / pièce</span><b>~${euros(x.gain)}</b></div>
+      </div>
+      ${ex.length ? `<details class="exemples">
+        <summary>Voir les ${ex.length} annonces vendues</summary>
+        <div class="grille">${ex.map((a) => carte(a, "vente")).join("")}</div>
+      </details>` : ""}
+      ${photo ? `<button class="chine-btn" type="button" data-cle="${esc(String(photo.id ?? photo.url))}">🇨🇳 Trouver en Chine</button>` : ""}
+    </div>`;
+  }).join("");
+}
 
 // ---------- Top du moment
 function afficherTop() {
@@ -468,7 +580,7 @@ function carte(a, mode) {
     <div class="info">
       <div class="t">${esc(a.titre)}</div>
       <div class="p">${euros(prix)}</div>
-      <div class="m">${esc([a.marque, a.taille, a.etat].filter(Boolean).join(" · "))}</div>
+      <div class="m">${esc([aUneMarque(a) ? a.marque : "", a.taille, a.etat].filter(Boolean).join(" · "))}</div>
       <div class="m">${esc(String(a.categorie || "").split(" > ").pop())}</div>
       ${a.badge ? `<span class="badge">🔥 En demande</span> ` : ""}${bas}
     </div></a>
@@ -618,8 +730,11 @@ let annonceChine = null;
 const nombre = (id) => parseFloat(String($(id).value).replace(",", ".")) || 0;
 // Mots-clés pour les sites chinois : par défaut SANS la marque (les sites chinois ne connaissent pas les
 // marques occidentales et renvoient n'importe quoi), sans taille / état / mots inutiles.
-const SANS_MARQUE = ["(sans marque)", "no label", "sans marque", "none", "autre", "other", "handmade", "fait main"];
-const aUneMarque = (a) => a.marque && !SANS_MARQUE.includes(String(a.marque).toLowerCase().trim());
+// (mêmes règles que cible.py : sans marque, Vinted affiche le TITRE à la place de la marque)
+const SANS_MARQUE = ["(sans marque)", "no label", "sans marque", "none", "autre", "other", "handmade", "fait main",
+                     "inconnu", "unbranded", "no brand", "generique", "generic", "sans"];
+const simple = (t) => String(t ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+const aUneMarque = (a) => !!a.marque && !SANS_MARQUE.includes(simple(a.marque)) && simple(a.marque) !== simple(a.titre);
 function nettoyer(t) {
   return String(t || "")
     .replace(/\b(taille|size|neuf|neuve|new|tbe|très bon état|bon état|avec étiquette|sans étiquette|vintage|original|authentique|vendu|lot de)\b/gi, " ")
@@ -689,7 +804,7 @@ function ouvrirChine(a) {
   const prix = a.prix_final || a.prix;
   const prixTxt = prix == null ? "prix non relevé" : euros(prix);
   $("#chine-info").textContent = [VENDU(a) || a.vendu_detecte ? `vendu · ${prixTxt}` : `en vente · ${prixTxt}`,
-                                  a.marque, a.categorie].filter(Boolean).join(" · ");
+                                  aUneMarque(a) ? a.marque : "", a.categorie].filter(Boolean).join(" · ");
   $("#chine-mots").value = motsCles(a, "sans");
   const am = $("#chine-marque");
   am.hidden = !aUneMarque(a);
@@ -712,7 +827,7 @@ $("#chine-mots").addEventListener("input", liensChine);
 ["#m-vente", "#m-achat", "#m-livraison", "#m-emballage", "#m-frais", "#m-qte"].forEach((id) => $(id).addEventListener("input", calculerMarge));
 $("#chine").addEventListener("click", (e) => { if (e.target.id === "chine") e.target.close(); });   // clic à côté = fermer
 
-function afficherTout() { afficherTop(); afficherGrilles(); afficherDetails(); afficherRecherches(); afficherEtat(); }
+function afficherTout() { afficherOpportunites(); afficherTop(); afficherGrilles(); afficherDetails(); afficherRecherches(); afficherEtat(); }
 
 // ---------- chargement
 async function charger() {
@@ -727,8 +842,8 @@ async function charger() {
   afficherTout();
   chargerRecherchesDirectes().then(afficherRecherches);
 }
-const o = memo("onglet");
-if (o) document.querySelector(`nav button[data-onglet="${o}"]`)?.click();
+const o = memo("ecran");   // nouvelle clé : on arrive sur « Opportunités » par défaut
+ouvrirOnglet(o && document.getElementById(o) ? o : "opportunites");
 charger();
 setInterval(charger, 5 * 60 * 1000);   // se rafraîchit seul toutes les 5 min
 </script>

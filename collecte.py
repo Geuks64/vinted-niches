@@ -24,6 +24,8 @@ import time
 
 from curl_cffi import requests as cr
 
+from cible import est_cible
+
 BASE = "https://www.vinted.fr"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
@@ -33,6 +35,9 @@ ENTETES = {"User-Agent": UA, "Accept-Language": "fr-FR,fr;q=0.9"}
 DB = os.environ.get("NICHES_DB", "vinted.db")
 PAGES = int(os.environ.get("NICHES_PAGES", "6"))            # pages de catalogue par relevé (96 annonces/page)
 TAUX_SUIVI = float(os.environ.get("NICHES_TAUX", "0.07"))    # part des nouvelles annonces suivies
+# Écran « Opportunités » : les annonces NEUVES et SANS MARQUE (revendables depuis la Chine) reçoivent
+# PART_CIBLE du budget de suivi. Le nombre total d'annonces suivies (donc de requêtes) ne change pas.
+PART_CIBLE = float(os.environ.get("NICHES_PART_CIBLE", "0.75"))
 PAUSE = float(os.environ.get("NICHES_PAUSE", "5"))           # secondes entre deux requêtes
 DUREE_MAX = float(os.environ.get("NICHES_DUREE", "780"))     # durée max d'un relevé (s)
 CONTROLES_H = [6, 24, 72, 168]                               # quand revenir voir une annonce suivie
@@ -427,6 +432,17 @@ def temps_restant():
     return DUREE_MAX - (time.time() - DEBUT)
 
 
+def probas_suivi(cartes):
+    """(probabilité pour les cibles, pour les autres) : même budget total TAUX_SUIVI × nombre de cartes."""
+    n_cible = sum(1 for c in cartes if est_cible(c))
+    n_autre = len(cartes) - n_cible
+    budget = TAUX_SUIVI * len(cartes)
+    pour_cibles = min(PART_CIBLE * budget, n_cible)
+    p_cible = pour_cibles / n_cible if n_cible else 0
+    p_autre = (budget - pour_cibles) / n_autre if n_autre else 0
+    return min(1.0, p_cible), min(1.0, p_autre)
+
+
 def nouvelles_annonces(v, con):
     maintenant = int(time.time())
     vues = nouvelles = 0
@@ -441,8 +457,9 @@ def nouvelles_annonces(v, con):
         if page == 1 and cartes:
             # repère numéro <-> heure (sert à estimer l'âge des annonces pour le rattrapage)
             con.execute("INSERT OR REPLACE INTO reperes VALUES (?, ?)", (maintenant, max(c["id"] for c in cartes)))
+        p_cible, p_autre = probas_suivi(cartes)
         for c in cartes:
-            suivi = 1 if random.random() < TAUX_SUIVI else 0
+            suivi = 1 if random.random() < (p_cible if est_cible(c) else p_autre) else 0
             cur = con.execute(
                 """INSERT OR IGNORE INTO annonces (id, vu_le, titre, marque, taille, etat, prix, prix_total,
                    devise, favoris0, pro, miniature, url, suivi, prochain_controle, badge)
@@ -453,7 +470,7 @@ def nouvelles_annonces(v, con):
             nouvelles += cur.rowcount
         con.commit()
         badges = [c["badge"] for c in cartes if c["badge"]]
-        log(f"Catalogue page {page} : {len(cartes)} annonces" + (f" | badges : {badges[:5]}" if badges else ""))
+        log(f"Catalogue page {page} : {len(cartes)} annonces, dont {sum(map(est_cible, cartes))} neuves sans marque" + (f" | badges : {badges[:5]}" if badges else ""))
     return vues, nouvelles
 
 

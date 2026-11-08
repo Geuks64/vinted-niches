@@ -90,6 +90,14 @@
   stats : intervalles de Wilson (`ic_*`), `confiance` (0-100 = 100 − 2 × largeur de l'intervalle), `n_utilisees`,
   verdict `a_confirmer` sous 30 annonces, indice = 50 + confiance/100 × (brut − 50), vue « Particuliers » (pro = 0).
   NE PAS commencer le lot 2 (mots qui font vendre, prix d'achat max, tendances) sans accord de l'utilisateur.
+- **Opportunités (2026-11-08)** : écran principal de l'appli (onglets : 💎 Opportunités, 🔎 Recherche, ☰ Plus = Top,
+  Plus aimées, Ventes, Détails, Relevé + bascule Europe/France/Particuliers). `cible.py` = annonces NEUVES et SANS
+  MARQUE (sans marque, la carte Vinted affiche le titre à la place de la marque). `collecte.probas_suivi()` donne
+  `PART_CIBLE` (75 %) du budget de suivi aux cibles, budget total INCHANGÉ (TAUX_SUIVI × cartes : pas plus de requêtes).
+  `stats.opportunites()` : par catégorie la plus fine, cibles seulement (suivi + rattrapage), ≥ N_MIN annonces et ≥ 2
+  ventes ; prix de vente = médiane des ventes, achat max = V × (1 − 0,123 − 0,40) − 0,5, gain ≈ 0,40 × V ; classement
+  = borne basse de Wilson × gain ; 10 types max, 12 vraies annonces vendues en exemple. Les prix chinois ne sont PAS
+  lus automatiquement (bouton « Trouver en Chine »).
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

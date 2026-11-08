@@ -13,6 +13,8 @@ import statistics
 import time
 from collections import defaultdict
 
+from cible import est_cible
+
 DB = os.environ.get("NICHES_DB", "vinted.db")
 SORTIE = os.environ.get("NICHES_SORTIE", "site/stats.json")
 N_MIN = int(os.environ.get("NICHES_N_MIN", "8"))      # échantillon minimum pour afficher un segment
@@ -41,6 +43,11 @@ TRANCHES_AGE = {"24h": (18, 48), "3j": (48, 120), "7j": (120, 260)}
 ETATS_VENDU = ("vendu", "vendu_probable")          # ventes : confirmées + probables (voir collecte.py)
 EXCLUS = ("supprime", "masque", "inconnu", "indisponible")   # jamais comptés comme vendus NI invendus
 N_FIABLE = 30   # en dessous : verdict « à confirmer »
+# Écran « Opportunités » (articles neufs sans marque, achetés en Chine puis revendus sur Vinted)
+COTISATIONS = 0.123   # cotisations sociales micro-entreprise (part du prix de vente)
+EMBALLAGE = 0.5       # emballage par pièce (€)
+MARGE_VISEE = 0.40    # marge minimum visée (part du prix de vente)
+N_OPPORTUNITES = 10
 
 
 def est_vendu(a):
@@ -161,6 +168,63 @@ def carte(a, maintenant):
     return c
 
 
+def exemple(a, maintenant):
+    """Carte d'une annonce vendue (exemple sous une opportunité)."""
+    c = carte(a, maintenant)
+    if "verifie_le" in a:            # rattrapage : vendue à un moment inconnu, publiée il y a ~age_h
+        c["rattrapage"], c["age_h"] = 1, a.get("age_h")
+        c["vu_le"] = a["verifie_le"] - int((a.get("age_h") or 0) * 3600)
+    return c
+
+
+def opportunites(suivies, ratt, maintenant):
+    """Les types d'articles NEUFS SANS MARQUE qui se vendent le mieux, avec le prix d'achat à ne pas dépasser.
+
+    Type = catégorie la plus fine de Vinted (ex. « Bijoux > Bagues »). Les chiffres sont calculés sur le type,
+    les exemples sont les vraies annonces vendues de ce type.
+    Prix d'achat max = prix de vente × (1 − cotisations − marge visée) − emballage  -> gain ≈ marge visée × prix.
+    Classement prudent : borne basse de l'intervalle de Wilson du % vendu × gain par pièce."""
+    s_c = [a for a in suivies if a.get("categorie") and est_cible(a)]
+    r_c = [a for a in ratt if a.get("categorie") and est_cible(a)]
+    groupes, groupes_r = defaultdict(list), defaultdict(list)
+    for a in s_c:
+        groupes[a["categorie"]].append(a)
+    for a in r_c:
+        groupes_r[a["categorie"]].append(a)
+    ref = segment_stats(s_c, maintenant, r_c)
+    res = []
+    for cat in set(groupes) | set(groupes_r):
+        st = segment_stats(groupes.get(cat, []), maintenant, groupes_r.get(cat, []))
+        vente = st["prix_vendu"]
+        if st["n"] < N_MIN or st["vendues"] < 2 or not st["fenetre"] or not vente:
+            continue
+        achat_max = round(vente * (1 - COTISATIONS - MARGE_VISEE) - EMBALLAGE, 2)
+        if achat_max < 0.5:          # trop bon marché pour dégager un vrai gain
+            continue
+        gain = round(vente * MARGE_VISEE, 2)
+        f = st["fenetre"]
+        bas = st["ic_" + f][0] or 0
+        vendues = [a for a in groupes.get(cat, []) + groupes_r.get(cat, []) if est_vendu(a)]
+        vendues.sort(key=lambda a: (not a.get("miniature"), -(a.get("vendu_detecte") or a.get("verifie_le") or 0)))
+        niveaux = cat.split(" > ")
+        res.append({
+            "nom": cat, "type": niveaux[-1], "chemin": " > ".join(niveaux[:-1]),
+            "prix_vendu": vente, "achat_max": achat_max, "gain": gain,
+            "delai_h": st["delai_h"], "fenetre": f, "taux": st["taux_" + f], "ic": st["ic_" + f],
+            "n": st["n"], "n_utilisees": st["n_utilisees"], "vendues": st["vendues"],
+            "vendues_confirmees": st["vendues_confirmees"], "confiance": st["confiance"],
+            "a_confirmer": st["n_utilisees"] < N_FIABLE,
+            "score": round(bas / 100 * gain, 2),
+            "exemples": [exemple(a, maintenant) for a in vendues[:12]],
+        })
+    res.sort(key=lambda o: -o["score"])
+    return {"liste": res[:N_OPPORTUNITES], "n_types": len(res),
+            "suivies": len(s_c), "rattrapage": len(r_c), "vendues": ref["vendues"],
+            "taux_moyen": ref["taux_" + ref["fenetre"]] if ref["fenetre"] else None,
+            "fenetre_moyenne": ref["fenetre"],
+            "reglages": {"cotisations": COTISATIONS, "emballage": EMBALLAGE, "marge": MARGE_VISEE}}
+
+
 def calculer_vue(suivies, ratt, maintenant, offre):
     """Toutes les stats d'une « vue » (toute l'Europe, ou France seulement)."""
     # ---------- segments
@@ -273,6 +337,7 @@ def calculer_vue(suivies, ratt, maintenant, offre):
                       and a["statut"] in ("en_vente", "reserve")),
                      key=lambda a: -(a["favoris"] / max(1, (a["dernier_controle"] - a["vu_le"]) / 3600)))
     return {"segments": segments, "reference": ref, "top": top[:150],
+            "opportunites": opportunites(suivies, ratt, maintenant),
             "aimees": [carte(a, maintenant) for a in aimees],
             "ventes": [carte(a, maintenant) for a in ventes[:60]],
             "chaudes": [carte(a, maintenant) for a in chaudes[:40]],
