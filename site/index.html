@@ -123,6 +123,41 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .etiquette { position: absolute; top: 8px; left: 8px; font-size: 11.5px; font-weight: 700; padding: 2px 8px;
   border-radius: 99px; background: var(--carte); color: var(--texte); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 .etiquette.vendue { background: var(--bon); color: #fff; }
+.annonce .lien { color: inherit; text-decoration: none; display: flex; flex-direction: column; flex: 1; }
+.chine-btn {
+  margin: 0 10px 10px; font: inherit; font-size: 13px; font-weight: 700; color: var(--chaud);
+  background: var(--chaud-doux); border: 0; border-radius: 8px; padding: 7px 8px; cursor: pointer;
+}
+
+/* Panneau « Trouver en Chine » + calcul de marge */
+dialog#chine {
+  width: min(560px, 100vw); max-width: 100vw; max-height: 92vh; margin: auto auto 0; padding: 0; border: 0;
+  border-radius: 16px 16px 0 0; background: var(--fond); color: var(--texte);
+}
+@media (min-width: 600px) { dialog#chine { margin: auto; border-radius: 16px; } }
+dialog#chine::backdrop { background: rgba(0,0,0,.45); }
+.panneau { padding: 14px 16px calc(18px + env(safe-area-inset-bottom)); }
+.panneau .entete { display: flex; gap: 12px; align-items: flex-start; }
+.panneau .entete img { width: 72px; height: 96px; object-fit: cover; border-radius: 8px; background: var(--barre-fond); flex: none; }
+.panneau h3 { margin: 0; font-size: 16px; }
+.fermer { margin-left: auto; font: inherit; font-size: 20px; line-height: 1; background: none; border: 0; color: var(--texte-2); cursor: pointer; padding: 4px; }
+.liens-chine { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.liens-chine a {
+  display: block; text-align: center; font-weight: 700; font-size: 14px; text-decoration: none; color: var(--texte);
+  background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 10px 6px;
+}
+.liens-chine a.photo { grid-column: 1 / -1; background: var(--accent); border-color: var(--accent); color: #fff; }
+.champs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.champs label { font-size: 12.5px; color: var(--texte-2); display: flex; flex-direction: column; gap: 3px; }
+.champs input, .mots {
+  font: inherit; font-size: 16px; color: var(--texte); background: var(--carte); border: 1px solid var(--bord);
+  border-radius: 10px; padding: 8px 10px; min-width: 0; width: 100%;
+}
+.resultat { margin-top: 12px; background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 12px; }
+.resultat .gros { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.resultat .lignes { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 13.5px; color: var(--texte-2); margin-top: 6px; }
+.resultat .lignes b { color: var(--texte); text-align: right; font-variant-numeric: tabular-nums; }
+.petit { font-size: 12px; color: var(--texte-3); margin: 8px 0 0; }
 
 /* Recherche */
 .recherche-form { display: flex; gap: 8px; margin-bottom: 8px; }
@@ -259,6 +294,35 @@ th { color: var(--texte-2); font-weight: 600; }
   </section>
 </main>
 
+<!-- ================= PANNEAU « TROUVER EN CHINE » ================= -->
+<dialog id="chine" aria-labelledby="chine-titre">
+  <div class="panneau">
+    <div class="entete">
+      <img id="chine-img" alt="">
+      <div><h3 id="chine-titre"></h3><div class="petit" id="chine-info"></div></div>
+      <button class="fermer" type="button" aria-label="Fermer" onclick="document.getElementById('chine').close()">✕</button>
+    </div>
+    <h2 style="margin-top:12px">1. Trouver le produit</h2>
+    <input class="mots" id="chine-mots" aria-label="Mots-clés de recherche">
+    <div class="liens-chine" id="chine-liens"></div>
+    <p class="petit">La recherche <b>par photo</b> retrouve souvent l'article exact (AliExpress, Temu…).
+      Pour 1688 (grossiste chinois), les mots en chinois donnent de meilleurs résultats.</p>
+    <h2>2. Calculer la marge</h2>
+    <div class="champs">
+      <label>Prix de vente Vinted (€)<input id="m-vente" type="number" inputmode="decimal" step="0.01" min="0"></label>
+      <label>Prix d'achat en Chine (€)<input id="m-achat" type="number" inputmode="decimal" step="0.01" min="0" placeholder="ex. 4,50"></label>
+      <label>Livraison par pièce (€)<input id="m-livraison" type="number" inputmode="decimal" step="0.01" min="0"></label>
+      <label>Emballage par envoi (€)<input id="m-emballage" type="number" inputmode="decimal" step="0.01" min="0"></label>
+      <label>Cotisations et frais (%)<input id="m-frais" type="number" inputmode="decimal" step="0.1" min="0"></label>
+      <label>Quantité achetée<input id="m-qte" type="number" inputmode="numeric" step="1" min="1"></label>
+    </div>
+    <div class="resultat" id="m-resultat"></div>
+    <p class="petit">Sur Vinted, l'acheteur paie la livraison et les frais de protection : le vendeur touche le prix affiché.
+      Acheter pour revendre est une activité commerciale à déclarer (micro-entreprise « vente de marchandises » :
+      ~12,3 % du chiffre d'affaires). Les achats hors UE incluent normalement la TVA à la commande.</p>
+  </div>
+</dialog>
+
 <script>
 // ---------- utilitaires
 const $ = (s) => document.querySelector(s);
@@ -358,7 +422,9 @@ function carte(a, mode) {
   }
   const etiq = mode === "aimee" ? (a.statut === "vendu" ? `<span class="etiquette vendue">Vendue</span>`
                                                         : `<span class="etiquette">En vente</span>`) : "";
-  return `<a class="annonce" href="https://www.vinted.fr${esc(a.url || "/items/" + a.id)}" target="_blank" rel="noopener">
+  ANNONCES.set(String(a.id ?? a.url), a);
+  return `<div class="annonce">
+    <a class="lien" href="https://www.vinted.fr${esc(a.url || "/items/" + a.id)}" target="_blank" rel="noopener">
     ${etiq}<img loading="lazy" src="${esc(a.miniature)}" alt="">
     <div class="info">
       <div class="t">${esc(a.titre)}</div>
@@ -366,8 +432,15 @@ function carte(a, mode) {
       <div class="m">${esc([a.marque, a.taille, a.etat].filter(Boolean).join(" · "))}</div>
       <div class="m">${esc(a.categorie || "")}</div>
       ${a.badge ? `<span class="badge">🔥 En demande</span> ` : ""}${bas}
-    </div></a>`;
+    </div></a>
+    <button class="chine-btn" type="button" data-cle="${esc(String(a.id ?? a.url))}">🇨🇳 Trouver en Chine</button>
+  </div>`;
 }
+const ANNONCES = new Map();   // annonces affichées (pour le panneau « Trouver en Chine »)
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".chine-btn");
+  if (b) ouvrirChine(ANNONCES.get(b.dataset.cle));
+});
 function afficherGrilles() {
   const v = V();
   $("#grille-aimees").innerHTML = (v.aimees || []).length ? v.aimees.map((a) => carte(a, "aimee")).join("")
@@ -431,7 +504,11 @@ function afficherRecherches() {
         <li>❤️ <b>${fmt(r.favoris_jour)}</b> / jour par annonce (moyenne Vinted ${fmt(r.favoris_jour_moyen_vinted)})</li>
         ${h ? `<li>Déjà repérées : <b>${h.vendues}</b> vendues sur ${h.n} · prix vendu <b>${euros(h.prix_vendu)}</b></li>` : ""}
         ${suivi}
-      </ul></div>`;
+      </ul>
+      ${(r.plus_aimees || []).length ? `<p class="petit">Les plus aimées pour cette recherche :</p>
+        <div class="grille" style="margin-top:6px">${r.plus_aimees.map((a) => carte({ ...a, id: a.url, favoris_jour:
+          a.age_h ? Math.round(10 * a.favoris / Math.max(a.age_h / 24, 0.25)) / 10 : null }, "aimee-r")).join("")}</div>` : ""}
+      </div>`;
   }).join("");
 }
 
@@ -454,6 +531,80 @@ function afficherEtat() {
     (S.indicateurs_bruts.length ? S.indicateurs_bruts.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")
       : `<tr><td colspan="2">Aucun contrôle encore effectué.</td></tr>`);
 }
+
+// ---------- panneau « Trouver en Chine » + calcul de marge
+let annonceChine = null;
+const nombre = (id) => parseFloat(String($(id).value).replace(",", ".")) || 0;
+function motsCles(a) {
+  // titre nettoyé : sans taille / état / mots vides, + marque si absente du titre
+  let t = String(a.titre || "").replace(/\b(taille|size|neuf|neuve|new|tbe|très bon état|bon état|avec étiquette)\b/gi, " ")
+    .replace(/\b(xxs|xs|s|m|l|xl|xxl|xxxl|\d{2,3}\s?cm)\b/gi, " ").replace(/[|·•,;:!()\[\]]/g, " ").replace(/\s+/g, " ").trim();
+  if (a.marque && !t.toLowerCase().includes(String(a.marque).toLowerCase()) && a.marque !== "(sans marque)") t = `${a.marque} ${t}`;
+  return t;
+}
+function liensChine() {
+  const q = $("#chine-mots").value.trim(), e = encodeURIComponent(q), a = annonceChine;
+  const liens = [];
+  if (a.miniature) liens.push(["photo", "📷 Recherche par photo (Google Lens)", `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(a.miniature)}`]);
+  liens.push(["", "AliExpress", `https://fr.aliexpress.com/w/wholesale-${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`]);
+  liens.push(["", "Temu", `https://www.temu.com/fr/search_result.html?search_key=${e}`]);
+  liens.push(["", "Alibaba", `https://www.alibaba.com/trade/search?SearchText=${e}`]);
+  liens.push(["", "1688", `https://s.1688.com/selloffer/offer_search.htm?keywords=${e}&charset=utf8`]);
+  liens.push(["", "DHgate", `https://www.dhgate.com/wholesale/search.do?searchkey=${e}`]);
+  liens.push(["", "Traduire en chinois", `https://translate.google.com/?sl=auto&tl=zh-CN&text=${e}`]);
+  $("#chine-liens").innerHTML = liens.map(([c, t, u]) => `<a class="${c}" href="${esc(u)}" target="_blank" rel="noopener">${t}</a>`).join("");
+}
+function calculerMarge() {
+  const vente = nombre("#m-vente"), achat = nombre("#m-achat"), liv = nombre("#m-livraison");
+  const emb = nombre("#m-emballage"), frais = nombre("#m-frais") / 100, qte = Math.max(1, Math.round(nombre("#m-qte")));
+  // mémorise les réglages et le prix d'achat de cette annonce
+  memo("marge_emballage", $("#m-emballage").value); memo("marge_frais", $("#m-frais").value); memo("marge_qte", $("#m-qte").value);
+  if (annonceChine) memo("achat_" + (annonceChine.id ?? annonceChine.url), JSON.stringify({ achat: $("#m-achat").value, liv: $("#m-livraison").value }));
+  if (!achat || !vente) {
+    $("#m-resultat").innerHTML = `<span class="petit">Entre ${!vente ? "le prix de vente Vinted" : "le prix d'achat trouvé en Chine"} pour voir la marge.</span>`;
+    return;
+  }
+  const cout = achat + liv + emb, cotis = vente * frais, marge = vente - cout - cotis;
+  const tx = vente ? 100 * marge / vente : 0, roi = cout ? 100 * marge / cout : 0, seuil = frais < 1 ? cout / (1 - frais) : null;
+  const avis = marge <= 0 ? "❄️ À perte" : tx >= 50 ? "🔥 Très bonne marge" : tx >= 30 ? "👍 Bonne marge" : tx >= 15 ? "😐 Marge faible" : "❄️ Trop juste";
+  const e2 = (x) => euros(Math.round(x * 100) / 100);
+  $("#m-resultat").innerHTML = `
+    <div class="petit" style="margin:0">${avis}</div>
+    <div class="gros" style="color:${marge > 0 ? "var(--bon)" : "var(--chaud)"}">${marge > 0 ? "+" : ""}${e2(marge)} / pièce</div>
+    <div class="lignes">
+      <span>Marge sur le prix de vente</span><b>${fmt(Math.round(tx))} %</b>
+      <span>Rentabilité (gain / argent investi)</span><b>${fmt(Math.round(roi))} %</b>
+      <span>Coût de revient par pièce</span><b>${e2(cout)}</b>
+      <span>Cotisations et frais par vente</span><b>${e2(cotis)}</b>
+      <span>Gain pour ${qte} pièce${qte > 1 ? "s" : ""} (si tout se vend)</span><b>${e2(marge * qte)}</b>
+      <span>Investissement pour ${qte} pièce${qte > 1 ? "s" : ""}</span><b>${e2((achat + liv) * qte)}</b>
+      <span>Prix de vente minimum (sans perte)</span><b>${seuil != null ? e2(seuil) : "—"}</b>
+      <span>Coefficient (vente ÷ achat)</span><b>× ${fmt(Math.round(10 * vente / achat) / 10)}</b>
+    </div>`;
+}
+function ouvrirChine(a) {
+  if (!a) return;
+  annonceChine = a;
+  $("#chine-img").src = a.miniature || "";
+  $("#chine-titre").textContent = a.titre || "Annonce";
+  const prix = a.prix_final || a.prix;
+  $("#chine-info").textContent = [a.statut === "vendu" || a.vendu_detecte ? `vendu ${euros(prix)}` : `affiché ${euros(prix)}`,
+                                  a.marque, a.categorie].filter(Boolean).join(" · ");
+  $("#chine-mots").value = motsCles(a);
+  liensChine();
+  const sauve = JSON.parse(memo("achat_" + (a.id ?? a.url)) || "{}");
+  $("#m-vente").value = prix ?? "";
+  $("#m-achat").value = sauve.achat || "";
+  $("#m-livraison").value = sauve.liv ?? "0";
+  $("#m-emballage").value = memo("marge_emballage") ?? "0.5";
+  $("#m-frais").value = memo("marge_frais") ?? "12.3";
+  $("#m-qte").value = memo("marge_qte") ?? "10";
+  calculerMarge();
+  $("#chine").showModal();
+}
+$("#chine-mots").addEventListener("input", liensChine);
+["#m-vente", "#m-achat", "#m-livraison", "#m-emballage", "#m-frais", "#m-qte"].forEach((id) => $(id).addEventListener("input", calculerMarge));
+$("#chine").addEventListener("click", (e) => { if (e.target.id === "chine") e.target.close(); });   // clic à côté = fermer
 
 function afficherTout() { afficherTop(); afficherGrilles(); afficherDetails(); afficherRecherches(); afficherEtat(); }
 
