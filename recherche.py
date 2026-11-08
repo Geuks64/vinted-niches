@@ -93,7 +93,7 @@ def main():
         if not con or not con.execute("SELECT 1 FROM reperes LIMIT 1").fetchone():
             return None
         return max(0.1, collecte.id_vers_age(con, c["id"], maintenant))
-    for c in cartes:
+    for c in recentes + pertinentes:   # les deux listes (une annonce peut être dans les deux)
         c["age_h"] = age_h(c)
 
     # Nouvelles annonces par jour : les plus récentes couvrent les X dernières heures
