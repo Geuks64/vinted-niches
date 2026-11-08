@@ -170,6 +170,7 @@ dialog#chine::backdrop { background: rgba(0,0,0,.45); }
 .resultat .lignes { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 13.5px; color: var(--texte-2); margin-top: 6px; }
 .resultat .lignes b { color: var(--texte); text-align: right; font-variant-numeric: tabular-nums; }
 .petit { font-size: 12px; color: var(--texte-3); margin: 8px 0 0; }
+.avert-marque { color: var(--chaud); background: var(--chaud-doux); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
 
 /* Recherche */
 .recherche-form { display: flex; gap: 8px; margin-bottom: 8px; }
@@ -322,7 +323,13 @@ th { color: var(--texte-2); font-weight: 600; }
       <button class="fermer" type="button" aria-label="Fermer" onclick="document.getElementById('chine').close()">✕</button>
     </div>
     <h2 style="margin-top:12px">1. Trouver le produit</h2>
+    <div class="puces" id="chine-modes" role="group" aria-label="Mots-clés" style="margin:0 0 8px">
+      <button type="button" data-mode="sans" aria-pressed="true" onclick="choisirMots('sans')">Sans la marque</button>
+      <button type="button" data-mode="type" aria-pressed="false" onclick="choisirMots('type')">Type de produit</button>
+      <button type="button" data-mode="complet" aria-pressed="false" onclick="choisirMots('complet')">Titre complet</button>
+    </div>
     <input class="mots" id="chine-mots" aria-label="Mots-clés de recherche">
+    <p class="petit avert-marque" id="chine-marque" hidden></p>
     <div class="liens-chine" id="chine-liens"></div>
     <p class="petit">La recherche <b>par photo</b> retrouve souvent l'article exact (AliExpress, Temu…).
       Pour 1688 (grossiste chinois), les mots en chinois donnent de meilleurs résultats.</p>
@@ -576,12 +583,38 @@ function afficherEtat() {
 // ---------- panneau « Trouver en Chine » + calcul de marge
 let annonceChine = null;
 const nombre = (id) => parseFloat(String($(id).value).replace(",", ".")) || 0;
-function motsCles(a) {
-  // titre nettoyé : sans taille / état / mots vides, + marque si absente du titre
-  let t = String(a.titre || "").replace(/\b(taille|size|neuf|neuve|new|tbe|très bon état|bon état|avec étiquette)\b/gi, " ")
-    .replace(/\b(xxs|xs|s|m|l|xl|xxl|xxxl|\d{2,3}\s?cm)\b/gi, " ").replace(/[|·•,;:!()\[\]]/g, " ").replace(/\s+/g, " ").trim();
-  if (a.marque && !t.toLowerCase().includes(String(a.marque).toLowerCase()) && a.marque !== "(sans marque)") t = `${a.marque} ${t}`;
+// Mots-clés pour les sites chinois : par défaut SANS la marque (les sites chinois ne connaissent pas les
+// marques occidentales et renvoient n'importe quoi), sans taille / état / mots inutiles.
+const SANS_MARQUE = ["(sans marque)", "no label", "sans marque", "none", "autre", "other", "handmade", "fait main"];
+const aUneMarque = (a) => a.marque && !SANS_MARQUE.includes(String(a.marque).toLowerCase().trim());
+function nettoyer(t) {
+  return String(t || "")
+    .replace(/\b(taille|size|neuf|neuve|new|tbe|très bon état|bon état|avec étiquette|sans étiquette|vintage|original|authentique|vendu|lot de)\b/gi, " ")
+    .replace(/\b(xxs|xs|s|m|l|xl|xxl|xxxl|small|medium|large|petit|moyen|grand|\d{1,3}\s?(cm|mm|ans|mois)|eu\s?\d+|\d{2}(?:[.,]5)?)\b/gi, " ")
+    .replace(/[|·•,;:!?()\[\]\/#*+"]/g, " ").replace(/\s+/g, " ").trim();
+}
+function motsCles(a, mode) {
+  const typeProduit = String(a.categorie || "").split(" > ").pop() || "";
+  if (mode === "complet") return nettoyer(`${aUneMarque(a) && !String(a.titre).toLowerCase().includes(String(a.marque).toLowerCase()) ? a.marque + " " : ""}${a.titre}`);
+  if (mode === "type") return typeProduit;
+  // « sans la marque » : on retire chaque mot de la marque du titre
+  let t = nettoyer(a.titre);
+  if (aUneMarque(a)) {
+    for (const mot of String(a.marque).split(/\s+/)) {
+      if (mot.length > 1) t = t.replace(new RegExp(`\\b${mot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi"), " ");
+    }
+    t = t.replace(/\s+/g, " ").trim();
+  }
+  // trop peu de mots utiles après nettoyage : on complète avec le type de produit
+  if (t.split(" ").filter((m) => m.length > 2).length < 2 && typeProduit && !t.toLowerCase().includes(typeProduit.toLowerCase())) {
+    t = `${typeProduit} ${t}`.trim();
+  }
   return t;
+}
+function choisirMots(mode) {
+  $("#chine-mots").value = motsCles(annonceChine, mode);
+  document.querySelectorAll("#chine-modes button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === mode));
+  liensChine();
 }
 function liensChine() {
   const q = $("#chine-mots").value.trim(), e = encodeURIComponent(q), a = annonceChine;
@@ -632,7 +665,12 @@ function ouvrirChine(a) {
   const prixTxt = prix == null ? "prix non relevé" : euros(prix);
   $("#chine-info").textContent = [VENDU(a) || a.vendu_detecte ? `vendu · ${prixTxt}` : `en vente · ${prixTxt}`,
                                   a.marque, a.categorie].filter(Boolean).join(" · ");
-  $("#chine-mots").value = motsCles(a);
+  choisirMots("sans");
+  const am = $("#chine-marque");
+  am.hidden = !aUneMarque(a);
+  am.innerHTML = aUneMarque(a) ? `⚠️ Article de marque (<b>${esc(a.marque)}</b>) : les sites chinois ne vendent pas la marque.
+    Utilise plutôt la <b>recherche par photo</b> pour trouver un modèle <b>similaire sans marque</b>.
+    Revendre une copie sous le nom de la marque est de la <b>contrefaçon</b> (interdit).` : "";
   liensChine();
   const sauve = JSON.parse(memo("achat_" + (a.id ?? a.url)) || "{}");
   $("#m-vente").value = prix ?? "";
