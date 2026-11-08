@@ -151,6 +151,10 @@ def calculer_vue(suivies, ratt, maintenant, offre):
             s = segment_stats(g.get(cle, []), maintenant, gr.get(cle, []))
             if s["n"] >= N_MIN:
                 tous = g.get(cle, []) + gr.get(cle, [])
+                if nom in ("produit", "categorie_large", "marque"):
+                    # annonces concernées (affichées sous la ligne du Top) : vendues d'abord, puis les plus aimées
+                    ex = sorted(tous, key=lambda a: (a["statut"] != "vendu", -(favoris_jour(a, maintenant) or 0)))
+                    s["exemples"] = [carte(a, maintenant) for a in ex if a.get("miniature")][:8]
                 fj = [x for x in (favoris_jour(a, maintenant) for a in tous) if x is not None]
                 s["favoris_jour"] = round(sum(fj) / len(fj), 2) if fj else None
                 s["part_demande"] = round(100 * sum(en_demande(a) for a in tous) / len(tous), 1)
@@ -196,6 +200,7 @@ def calculer_vue(suivies, ratt, maintenant, offre):
             else:
                 verdict = "moyen"
             top.append({"nom": l["nom"], "type": nom_seg, "indice": indice, "verdict": verdict,
+                        "exemples": l.get("exemples", []),
                         "taux_7j_estime": round(t7, 1), "favoris_jour": l["favoris_jour"],
                         "part_demande": l["part_demande"], "prix_vendu": l["prix_vendu"], "prix": l["prix"],
                         "delai_h": l["delai_h"], "n": l["n"], "vendues": l["vendues"],

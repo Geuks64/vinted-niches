@@ -105,6 +105,9 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .jauge i { display: block; height: 100%; background: var(--barre); border-radius: 0 4px 4px 0; }
 .chiffres { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--texte-2); }
 .chiffres b { color: var(--texte); font-variant-numeric: tabular-nums; }
+.exemples { margin-top: 8px; }
+.exemples summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13.5px; padding: 4px 0; }
+.exemples .grille { margin-top: 8px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .vide { color: var(--texte-2); background: var(--carte); border: 1px dashed var(--bord); border-radius: 12px; padding: 16px; }
 
 /* Cartes d'annonces */
@@ -406,6 +409,10 @@ function afficherTop() {
         ${l.part_demande ? `<span>🔥 badge <b>${fmt(l.part_demande, " %")}</b></span>` : ""}
         <span>${TYPES[l.type]} · <b>${l.n}</b> annonces · <b>${l.vendues}</b> vendues</span>
       </div>
+      ${(l.exemples || []).length ? `<details class="exemples">
+        <summary>Voir les ${l.exemples.length} annonces (vendues d'abord)</summary>
+        <div class="grille">${l.exemples.map((a) => carte(a, "aimee")).join("")}</div>
+      </details>` : ""}
     </div>`).join("");
 }
 $("#cherche-top").addEventListener("input", afficherTop);
@@ -430,7 +437,7 @@ function carte(a, mode) {
       <div class="t">${esc(a.titre)}</div>
       <div class="p">${euros(prix)}</div>
       <div class="m">${esc([a.marque, a.taille, a.etat].filter(Boolean).join(" · "))}</div>
-      <div class="m">${esc(a.categorie || "")}</div>
+      <div class="m">${esc(String(a.categorie || "").split(" > ").pop())}</div>
       ${a.badge ? `<span class="badge">🔥 En demande</span> ` : ""}${bas}
     </div></a>
     <button class="chine-btn" type="button" data-cle="${esc(String(a.id ?? a.url))}">🇨🇳 Trouver en Chine</button>
