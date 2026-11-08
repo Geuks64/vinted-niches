@@ -101,22 +101,19 @@ jobs:
       - name: Relance de secours (si la planification GitHub ne se déclenche pas)
         if: always()
         run: |
-          # Relevé planifié (cron) dans les 45 dernières minutes ? Alors GitHub s'en occupe, rien à faire.
-          derniere=$(gh run list --workflow releve.yml --event schedule --limit 1 --json createdAt --jq '.[0].createdAt // empty')
-          if [ -n "$derniere" ] && [ $(( $(date +%s) - $(date -d "$derniere" +%s) )) -lt 2700 ]; then
-            echo "La planification GitHub fonctionne : pas de relance."
-            exit 0
-          fi
-          # Un relevé est déjà en attente ? On ne double pas.
+          # La planification GitHub (cron) ne se déclenche que rarement sur ce dépôt (1 fois le 2026-11-08 à 16 h 44,
+          # puis plus rien) : chaque relevé lance donc le suivant. Les relevés ne tournent jamais en même temps
+          # (groupe « releve »), donc le rythme des requêtes à Vinted ne change pas.
+          # On attend que 20 min se soient écoulées depuis le début de ce relevé…
+          reste=$(( 1200 - ($(date +%s) - DEBUT_JOB) ))
+          if [ "$reste" -gt 0 ]; then echo "Pause de $reste s avant la relance"; sleep "$reste"; fi
+          # … puis, si aucun relevé n'est déjà en attente (planifié ou lancé à la main), on lance le suivant.
           attente=$(gh run list --workflow releve.yml --limit 20 --json status \
             --jq '[.[] | select(.status=="queued" or .status=="pending" or .status=="waiting" or .status=="requested")] | length')
           if [ "$attente" != "0" ]; then
             echo "Un relevé est déjà en attente : pas de relance."
             exit 0
           fi
-          # On attend que 20 min se soient écoulées depuis le début de ce relevé, puis on relance.
-          reste=$(( 1200 - ($(date +%s) - DEBUT_JOB) ))
-          if [ "$reste" -gt 0 ]; then echo "Pause de $reste s avant la relance"; sleep "$reste"; fi
           gh workflow run releve.yml --ref main
           echo "Relevé suivant lancé."
 
