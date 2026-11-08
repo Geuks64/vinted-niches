@@ -294,12 +294,18 @@ def lire_annonce(html):
         devise = m2.group(1) if m2 else None
     d = details_annonce(f)
     if prix is None:
-        # bloc « faire une offre » de CETTE annonce : "price":{"amount":"26","currency_code":"EUR"},"seller_id":..,"title":..
-        m = re.search(r'"price":\{"amount":"([\d.]+)","currency_code":"(\w+)"\},"seller_id":"\d+","title":', f)
+        # bloc de l'annonce : "price":{"amount":"26","currency_code":"EUR"},"seller_id":..,"title":..
+        # (annonce VENDUE, constaté le 2026-11-08 : …"sellerReservation":null,"price":{…},"title":… sans seller_id)
+        m = re.search(r'"price":\{"amount":"([\d.]+)","currency_code":"(\w+)"\},(?:"seller_id":"\d+",)?"title":', f)
         if m:
             prix, devise = float(m.group(1)), m.group(2)
     d["devise"] = devise
     d["prix_eur"] = en_euros(prix, devise)
+    if d["prix_eur"] is None:
+        # secours : prix demandé déjà converti en euros par Vinted ("originalAskingAmount", devise du visiteur)
+        m = re.search(r'"originalAskingAmount":\{"amount":"([\d.]+)","currencyCode":"EUR"\}', f)
+        if m:
+            d["prix_eur"] = float(m.group(1))
     if not d["titre"]:
         m = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]*)"', html) or \
             re.search(r'<title>([^<]*)</title>', html)

@@ -23,7 +23,9 @@
   `catalog_id`, `breadcrumbs` (chemin de catégorie), JSON-LD `offers.availability` (`InStock` si en vente).
 - **Annonce vendue (constaté le 2026-11-08 via le rattrapage)** : `can_buy=false`, `instant_buy=false`, ni
   `is_reserved` ni `is_hidden`, et plus de fiche JSON-LD (pas d'`availability`, pas de prix ni de titre JSON-LD →
-  titre via `og:title`, prix via le bloc `"price":{"amount":...}`).
+  titre via `og:title`, prix via le bloc `"price":{"amount":"2","currency_code":"EUR"},"title":…` — SANS `seller_id`
+  sur une annonce vendue ; jusqu'au 2026-11-08 20 h le motif exigeait `seller_id` -> 802 ventes du rattrapage sans
+  prix ; secours `"originalAskingAmount":{"amount":…,"currencyCode":"EUR"}` = prix déjà converti en €).
 - **États (lot 1)** : `vendu_probable` (signature de vente, 1 lecture), `vendu` (signal explicite ou signature revue
   12 h plus tard = contrôle de confirmation), `indisponible` (can_buy=false mais JSON-LD encore InStock : vacances ?
   jamais compté), `supprime`/`masque`/`inconnu` (exclus des stats). `reclasser()` ne rétrograde jamais un `vendu`.

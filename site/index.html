@@ -579,7 +579,7 @@ function carte(a, mode) {
     ${etiq}<img loading="lazy" src="${esc(a.miniature)}" alt="">
     <div class="info">
       <div class="t">${esc(a.titre)}</div>
-      <div class="p">${euros(prix)}</div>
+      <div class="p">${prix == null ? `<span style="font-size:12px;font-weight:400;color:var(--texte-3)">prix non relevé</span>` : euros(prix)}</div>
       <div class="m">${esc([aUneMarque(a) ? a.marque : "", a.taille, a.etat].filter(Boolean).join(" · "))}</div>
       <div class="m">${esc(String(a.categorie || "").split(" > ").pop())}</div>
       ${a.badge ? `<span class="badge">🔥 En demande</span> ` : ""}${bas}
