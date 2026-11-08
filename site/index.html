@@ -137,16 +137,22 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 
 /* Panneau « Trouver en Chine » + calcul de marge */
 dialog#chine {
-  width: min(560px, 100vw); max-width: 100vw; max-height: 92vh; margin: auto auto 0; padding: 0; border: 0;
-  border-radius: 16px 16px 0 0; background: var(--fond); color: var(--texte);
+  width: min(560px, 100vw); max-width: 100vw; max-height: 85vh; max-height: 85dvh; margin: auto auto 0; padding: 0;
+  border: 0; border-radius: 16px 16px 0 0; background: var(--fond); color: var(--texte);
+  overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 600px) { dialog#chine { margin: auto; border-radius: 16px; } }
 dialog#chine::backdrop { background: rgba(0,0,0,.45); }
-.panneau { padding: 14px 16px calc(18px + env(safe-area-inset-bottom)); }
-.panneau .entete { display: flex; gap: 12px; align-items: flex-start; }
+.panneau { padding: 0 16px calc(18px + env(safe-area-inset-bottom)); }
+/* en-tête collé en haut du panneau : la croix reste visible pendant qu'on fait défiler */
+.panneau .entete { display: flex; gap: 12px; align-items: flex-start; position: sticky; top: 0; z-index: 2;
+  background: var(--fond); padding: 14px 0 10px; border-bottom: 1px solid var(--bord); }
 .panneau .entete img { width: 72px; height: 96px; object-fit: cover; border-radius: 8px; background: var(--barre-fond); flex: none; }
 .panneau h3 { margin: 0; font-size: 16px; }
-.fermer { margin-left: auto; font: inherit; font-size: 20px; line-height: 1; background: none; border: 0; color: var(--texte-2); cursor: pointer; padding: 4px; }
+.fermer { margin-left: auto; flex: none; font: inherit; font-size: 18px; line-height: 1; width: 36px; height: 36px;
+  border-radius: 50%; border: 0; background: var(--neutre-doux); color: var(--texte); cursor: pointer; }
+.fermer-bas { width: 100%; margin-top: 14px; font: inherit; font-weight: 700; padding: 12px; border-radius: 10px;
+  border: 1px solid var(--bord); background: var(--carte); color: var(--texte); cursor: pointer; }
 .liens-chine { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
 .liens-chine a {
   display: block; text-align: center; font-weight: 700; font-size: 14px; text-decoration: none; color: var(--texte);
@@ -333,6 +339,7 @@ th { color: var(--texte-2); font-weight: 600; }
     <p class="petit">Sur Vinted, l'acheteur paie la livraison et les frais de protection : le vendeur touche le prix affiché.
       Acheter pour revendre est une activité commerciale à déclarer (micro-entreprise « vente de marchandises » :
       ~12,3 % du chiffre d'affaires). Les achats hors UE incluent normalement la TVA à la commande.</p>
+    <button class="fermer-bas" type="button" onclick="document.getElementById('chine').close()">Fermer</button>
   </div>
 </dialog>
 
@@ -622,12 +629,14 @@ function ouvrirChine(a) {
   $("#chine-img").src = a.miniature || "";
   $("#chine-titre").textContent = a.titre || "Annonce";
   const prix = a.prix_final || a.prix;
-  $("#chine-info").textContent = [a.statut === "vendu" || a.vendu_detecte ? `vendu ${euros(prix)}` : `affiché ${euros(prix)}`,
+  const prixTxt = prix == null ? "prix non relevé" : euros(prix);
+  $("#chine-info").textContent = [VENDU(a) || a.vendu_detecte ? `vendu · ${prixTxt}` : `en vente · ${prixTxt}`,
                                   a.marque, a.categorie].filter(Boolean).join(" · ");
   $("#chine-mots").value = motsCles(a);
   liensChine();
   const sauve = JSON.parse(memo("achat_" + (a.id ?? a.url)) || "{}");
   $("#m-vente").value = prix ?? "";
+  $("#m-vente").placeholder = prix == null ? "à saisir" : "";
   $("#m-achat").value = sauve.achat || "";
   $("#m-livraison").value = sauve.liv ?? "0";
   $("#m-emballage").value = memo("marge_emballage") ?? "0.5";
