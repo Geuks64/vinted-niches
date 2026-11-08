@@ -419,6 +419,11 @@ def main():
         json.dump(stats, f, ensure_ascii=False, separators=(",", ":"))
     print(f"stats.json : {len(suivies)} suivies, {len(ratt)} rattrapage, {len(vue_tous['top'])} produits au top, "
           f"{len(vue_fr['top'])} en France")
+    o = vue_tous["opportunites"]
+    print(f"Opportunités : {len(o['liste'])} affichées / {o['n_types']} types | {o['suivies']} neuves sans marque suivies, "
+          f"{o['rattrapage']} en rattrapage, {o['vendues']} vendues"
+          + "".join(f"\n  - {x['type']} ({x['chemin']}) : vend {x['prix_vendu']} €, achat max {x['achat_max']} €, "
+                    f"{x['taux']} % en {x['fenetre']}, {x['n']} annonces" for x in o["liste"]))
 
 
 if __name__ == "__main__":
