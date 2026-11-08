@@ -1,0 +1,81 @@
+# Relevé automatique des annonces Vinted toutes les 20 minutes,
+# puis calcul des stats et mise en ligne du tableau de bord (GitHub Pages).
+# La base SQLite est conservée entre deux relevés dans la Release « donnees ».
+name: Relevé Vinted
+on:
+  schedule:
+    - cron: "7,27,47 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: releve
+  cancel-in-progress: false
+jobs:
+  releve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -q curl_cffi
+
+      - name: Récupérer la base
+        run: |
+          if gh release view donnees --json assets --jq '.assets[].name' 2>/dev/null | grep -qx vinted.db.gz; then
+            # La base existe : on DOIT la récupérer (sinon on écraserait l'historique par une base vide)
+            gh release download donnees -p vinted.db.gz --clobber
+            gunzip -f vinted.db.gz
+            ls -lh vinted.db
+          else
+            echo "Première exécution : base vide"
+          fi
+
+      - name: Relevé
+        id: collecte
+        continue-on-error: true
+        run: python collecte.py
+
+      - name: Statistiques
+        run: python stats.py
+
+      - name: Sauvegarder la base
+        run: |
+          gzip -kf vinted.db
+          gh release view donnees >/dev/null 2>&1 || \
+            gh release create donnees --title "Données du relevé" --notes "Base SQLite mise à jour automatiquement par le workflow « Relevé Vinted ». Ne pas supprimer."
+          gh release upload donnees vinted.db.gz --clobber
+          # Sauvegarde de secours une fois par jour (vers 3 h UTC)
+          if [ "$(date -u +%H)" = "03" ]; then
+            cp vinted.db.gz sauvegarde.db.gz && gh release upload donnees sauvegarde.db.gz --clobber
+          fi
+
+      - name: Garder le relevé actif
+        # GitHub coupe les tâches planifiées après 60 jours sans commit : un petit commit par mois.
+        run: |
+          mois=$(date -u +%Y-%m)
+          if [ "$(cat .maintien 2>/dev/null)" != "$mois" ]; then
+            echo "$mois" > .maintien
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .maintien && git commit -m "Maintien du relevé ($mois)" && git push || true
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - id: deploiement
+        uses: actions/deploy-pages@v4
+
+      - name: Résultat du relevé
+        if: steps.collecte.outcome == 'failure'
+        run: |
+          echo "Le relevé a échoué (voir l'étape « Relevé »). Les stats ont quand même été republiées."
+          exit 1

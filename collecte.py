@@ -1,0 +1,344 @@
+"""Niches Vinted — relevé automatique (lancé toutes les 20 min par GitHub Actions).
+
+Principe :
+  1. On lit les dernières annonces publiées (catalogue « plus récents », quelques pages).
+     Chaque annonce est enregistrée (titre, marque, taille, état, prix, favoris...).
+  2. Une partie d'entre elles (échantillon au hasard) est « suivie » : on revient voir
+     sa page après 6 h, 24 h, 3 j et 7 j pour savoir si elle est vendue.
+  3. Les statistiques (stats.py) en déduisent quelles catégories / marques / prix
+     se vendent le plus vite -> les niches.
+
+Règles de politesse : visiteur anonyme (aucun compte Vinted), une requête toutes les
+quelques secondes, arrêt immédiat du relevé si Vinted répond « 403 / 429 » plusieurs fois.
+
+Base de données : SQLite (vinted.db), conservée entre deux relevés dans une Release GitHub.
+"""
+import json
+import os
+import random
+import re
+import sqlite3
+import sys
+import time
+
+from curl_cffi import requests as cr
+
+BASE = "https://www.vinted.fr"
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
+ENTETES = {"User-Agent": UA, "Accept-Language": "fr-FR,fr;q=0.9"}
+
+# Réglages (modifiables par variables d'environnement dans le workflow)
+DB = os.environ.get("NICHES_DB", "vinted.db")
+PAGES = int(os.environ.get("NICHES_PAGES", "6"))            # pages de catalogue par relevé (96 annonces/page)
+TAUX_SUIVI = float(os.environ.get("NICHES_TAUX", "0.07"))    # part des nouvelles annonces suivies
+PAUSE = float(os.environ.get("NICHES_PAUSE", "4"))           # secondes entre deux requêtes
+DUREE_MAX = float(os.environ.get("NICHES_DUREE", "780"))     # durée max d'un relevé (s)
+CONTROLES_H = [6, 24, 72, 168]                               # quand revenir voir une annonce suivie
+
+DEBUT = time.time()
+
+
+def log(*a):
+    print(time.strftime("%H:%M:%S"), *a, flush=True)
+
+
+# ---------------------------------------------------------------- base de données
+
+def ouvrir_base():
+    con = sqlite3.connect(DB)
+    con.executescript("""
+    CREATE TABLE IF NOT EXISTS annonces (
+        id INTEGER PRIMARY KEY,
+        vu_le INTEGER,             -- 1re fois vue (horodatage Unix)
+        titre TEXT, marque TEXT, taille TEXT, etat TEXT,
+        prix REAL, prix_total REAL, devise TEXT,
+        favoris0 INTEGER,          -- favoris au moment où on l'a vue
+        pro INTEGER,               -- vendeur professionnel ?
+        miniature TEXT, url TEXT,
+        suivi INTEGER DEFAULT 0,   -- 1 = on revient voir si elle se vend
+        n_controles INTEGER DEFAULT 0,
+        prochain_controle INTEGER, -- horodatage du prochain passage (NULL = plus de suivi)
+        dernier_controle INTEGER,
+        statut TEXT DEFAULT 'nouveau',  -- nouveau / en_vente / reserve / vendu / supprime / masque / inconnu
+        categorie_id INTEGER, categorie TEXT,   -- ex. « Femmes > Vêtements > Robes »
+        favoris INTEGER,           -- favoris au dernier contrôle
+        prix_final REAL,
+        vendu_apres_h INTEGER,     -- vendue entre vendu_apres_h et vendu_avant_h heures
+        vendu_avant_h INTEGER,
+        vendu_detecte INTEGER,     -- horodatage de la détection de la vente
+        brut TEXT                  -- indicateurs bruts lus sur la page (pour vérifier)
+    );
+    CREATE INDEX IF NOT EXISTS i_controle ON annonces(prochain_controle) WHERE prochain_controle IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS i_vu ON annonces(vu_le);
+    -- Annonces NON suivies de plus de 2 jours : résumées par jour et par marque puis effacées
+    -- (sert à mesurer l'offre : combien d'annonces nouvelles par marque).
+    CREATE TABLE IF NOT EXISTS offre_jour (
+        jour TEXT, marque TEXT, n INTEGER, somme_prix REAL, PRIMARY KEY (jour, marque)
+    );
+    CREATE TABLE IF NOT EXISTS releves (
+        debut INTEGER, duree REAL, nouvelles INTEGER, vues INTEGER,
+        controles INTEGER, ventes INTEGER, blocages INTEGER, note TEXT
+    );
+    """)
+    return con
+
+
+# ---------------------------------------------------------------- lecture des pages Vinted
+
+def flux_next(html):
+    """Le site est en Next.js : les données sont dans des morceaux self.__next_f.push([1,"..."]).
+    On les recolle et on les déséchappe pour obtenir un texte où chercher du JSON."""
+    morceaux = []
+    for m in re.finditer(r'self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)', html):
+        try:
+            morceaux.append(json.loads(m.group(1)))
+        except ValueError:
+            pass
+    return "".join(morceaux)
+
+
+def objets_apres(texte, cle):
+    """Tous les objets JSON qui suivent "cle": dans le texte."""
+    dec, res = json.JSONDecoder(), []
+    for m in re.finditer('"' + re.escape(cle) + '":', texte):
+        i = m.end()
+        while i < len(texte) and texte[i] in " \n\t":
+            i += 1
+        try:
+            obj, _ = dec.raw_decode(texte, i)
+            res.append(obj)
+        except ValueError:
+            continue
+    return res
+
+
+def montant(p):
+    try:
+        return float((p or {}).get("amount"))
+    except (TypeError, ValueError):
+        return None
+
+
+def lire_cartes(html):
+    """Annonces d'une page de catalogue -> liste de dict."""
+    vues, res = set(), []
+    for c in objets_apres(flux_next(html), "productItem"):
+        if not isinstance(c, dict) or not c.get("id") or c["id"] in vues:
+            continue
+        vues.add(c["id"])
+        box = c.get("itemBox") or {}
+        ligne2 = str(box.get("secondLine") or "")
+        taille, etat = "", ligne2
+        if " · " in ligne2:
+            taille, etat = ligne2.split(" · ", 1)
+        marque = box.get("firstLine")
+        res.append({
+            "id": int(c["id"]),
+            "titre": c.get("title"),
+            "marque": marque if isinstance(marque, str) and marque != "$undefined" else None,
+            "taille": taille or None,
+            "etat": etat or None,
+            "prix": montant(c.get("price")),
+            "prix_total": montant(c.get("totalItemPrice")),
+            "devise": (c.get("price") or {}).get("currencyCode"),
+            "favoris0": c.get("favouriteCount") or 0,
+            "pro": 1 if (c.get("user") or {}).get("isBusiness") else 0,
+            "miniature": c.get("thumbnailUrl"),
+            "url": c.get("url"),
+        })
+    return res
+
+
+def lire_annonce(html):
+    """Page d'une annonce -> état (en vente / vendue...), catégorie, favoris, prix."""
+    f = flux_next(html)
+    brut = {}
+    for cle in ["can_buy", "instant_buy", "is_hidden", "is_reserved", "is_closed", "is_sold",
+                "favourite_count", "catalog_id", "availability", "item_closing_action"]:
+        m = re.search(r'"' + cle + r'":\s*("[^"]*"|true|false|null|-?\d+(?:\.\d+)?)', f)
+        if m:
+            brut[cle] = json.loads(m.group(1))
+    # Fil d'Ariane : Femmes > Vêtements > Hauts et t-shirts > T-shirts
+    chemin = []
+    for b in objets_apres(f, "breadcrumbs"):
+        if isinstance(b, list) and b and isinstance(b[0], dict):
+            chemin = [x.get("title") for x in b if x.get("url", "").startswith("/catalog/")
+                      and "/brand/" not in x.get("url", "")]
+            break
+    prix = None
+    m = re.search(r'"offers":\{[^{}]*?"price":\s*([\d.]+)', f)
+    if m:
+        prix = float(m.group(1))
+    return brut, " > ".join(t for t in chemin if t), prix
+
+
+def statut_depuis(brut):
+    """Déduit le statut à partir des indicateurs de la page."""
+    dispo = str(brut.get("availability", "")).lower()
+    if brut.get("is_closed") is True or brut.get("is_sold") is True or "sold" in dispo or "outofstock" in dispo:
+        return "vendu"
+    if brut.get("is_reserved") is True:
+        return "reserve"
+    if brut.get("is_hidden") is True:
+        return "masque"
+    if brut.get("can_buy") is False and dispo and "instock" not in dispo:
+        return "vendu"
+    return "en_vente"
+
+
+class Vinted:
+    """Session anonyme + pause entre requêtes + détection de blocage."""
+
+    def __init__(self):
+        self.s = cr.Session(impersonate="chrome")
+        self.blocages = 0
+        self.dernier = 0.0
+
+    def get(self, chemin):
+        attente = PAUSE * random.uniform(0.8, 1.3) - (time.time() - self.dernier)
+        if attente > 0:
+            time.sleep(attente)
+        self.dernier = time.time()
+        try:
+            r = self.s.get(BASE + chemin, headers=ENTETES, timeout=40)
+        except Exception as e:
+            log("  erreur réseau", chemin, e)
+            return None
+        if r.status_code in (403, 429):
+            self.blocages += 1
+            log(f"  {r.status_code} sur {chemin} (blocage n°{self.blocages})")
+        return r
+
+    def bloque(self):
+        return self.blocages >= 3
+
+
+# ---------------------------------------------------------------- étapes du relevé
+
+def temps_restant():
+    return DUREE_MAX - (time.time() - DEBUT)
+
+
+def nouvelles_annonces(v, con):
+    maintenant = int(time.time())
+    vues = nouvelles = 0
+    for page in range(1, PAGES + 1):
+        if v.bloque() or temps_restant() < 60:
+            break
+        r = v.get(f"/catalog?order=newest_first&page={page}")
+        if r is None or r.status_code != 200:
+            continue
+        cartes = lire_cartes(r.text)
+        vues += len(cartes)
+        for c in cartes:
+            suivi = 1 if random.random() < TAUX_SUIVI else 0
+            cur = con.execute(
+                """INSERT OR IGNORE INTO annonces (id, vu_le, titre, marque, taille, etat, prix, prix_total,
+                   devise, favoris0, pro, miniature, url, suivi, prochain_controle)
+                   VALUES (:id, :vu_le, :titre, :marque, :taille, :etat, :prix, :prix_total, :devise,
+                   :favoris0, :pro, :miniature, :url, :suivi, :prochain)""",
+                {**c, "vu_le": maintenant, "suivi": suivi,
+                 "prochain": maintenant + CONTROLES_H[0] * 3600 if suivi else None})
+            nouvelles += cur.rowcount
+        con.commit()
+        log(f"Catalogue page {page} : {len(cartes)} annonces")
+    return vues, nouvelles
+
+
+def controles(v, con):
+    """Revient voir les annonces suivies dont c'est l'heure."""
+    faits = ventes = 0
+    while not v.bloque() and temps_restant() > 30:
+        maintenant = int(time.time())
+        lot = con.execute(
+            """SELECT id, vu_le, n_controles, url, statut FROM annonces
+               WHERE prochain_controle IS NOT NULL AND prochain_controle <= ?
+               ORDER BY prochain_controle LIMIT 20""", (maintenant,)).fetchall()
+        if not lot:
+            break
+        for iid, vu_le, n, url, ancien in lot:
+            if v.bloque() or temps_restant() < 30:
+                break
+            r = v.get(url or f"/items/{iid}")
+            if r is None or r.status_code not in (200, 404, 410):
+                # erreur réseau / 403 / 429 / 500 : on reporte ce contrôle de 30 min
+                con.execute("UPDATE annonces SET prochain_controle = ? WHERE id = ?",
+                            (int(time.time()) + 1800, iid))
+                continue
+            maintenant = int(time.time())
+            age_h = (maintenant - vu_le) / 3600
+            h_prec = CONTROLES_H[n - 1] if n > 0 else 0
+            h_now = CONTROLES_H[min(n, len(CONTROLES_H) - 1)]
+            n2 = n + 1
+            prochain = vu_le + CONTROLES_H[n2] * 3600 if n2 < len(CONTROLES_H) else None
+            redirige = "/items/" not in str(getattr(r, "url", "") or "/items/")
+            if r.status_code in (404, 410) or redirige:   # supprimée (ou redirigée ailleurs)
+                con.execute("""UPDATE annonces SET statut='supprime', n_controles=?, prochain_controle=NULL,
+                               dernier_controle=? WHERE id=?""", (n2, maintenant, iid))
+            elif r.status_code == 200:
+                brut, categorie, prix = lire_annonce(r.text)
+                # page sans aucun indicateur lisible -> « inconnu » (exclu des stats)
+                statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
+                cat_id = brut.get("catalog_id")
+                valeurs = {"id": iid, "n": n2, "t": maintenant, "statut": statut,
+                           "cat_id": int(cat_id) if str(cat_id or "").isdigit() else None,
+                           "cat": categorie or None, "fav": brut.get("favourite_count"),
+                           "prix": prix, "brut": json.dumps(brut, ensure_ascii=False),
+                           "prochain": prochain}
+                if statut == "vendu":
+                    ventes += 1
+                    valeurs.update(prochain=None, apres=h_prec, avant=max(h_now, int(age_h)))
+                    con.execute("""UPDATE annonces SET statut=:statut, n_controles=:n, dernier_controle=:t,
+                        prochain_controle=:prochain, categorie_id=COALESCE(:cat_id, categorie_id),
+                        categorie=COALESCE(:cat, categorie), favoris=:fav, prix_final=:prix, brut=:brut,
+                        vendu_apres_h=:apres, vendu_avant_h=:avant, vendu_detecte=:t WHERE id=:id""", valeurs)
+                else:
+                    con.execute("""UPDATE annonces SET statut=:statut, n_controles=:n, dernier_controle=:t,
+                        prochain_controle=:prochain, categorie_id=COALESCE(:cat_id, categorie_id),
+                        categorie=COALESCE(:cat, categorie), favoris=:fav, prix_final=:prix, brut=:brut
+                        WHERE id=:id""", valeurs)
+            faits += 1
+        con.commit()
+    log(f"Contrôles : {faits} annonces revues, {ventes} ventes détectées")
+    return faits, ventes
+
+
+def compacter(con):
+    """Résume puis efface les annonces non suivies de plus de 48 h (garde la base légère)."""
+    limite = int(time.time()) - 48 * 3600
+    con.execute("""INSERT INTO offre_jour (jour, marque, n, somme_prix)
+        SELECT date(vu_le, 'unixepoch'), COALESCE(marque, '(sans marque)'), COUNT(*), SUM(COALESCE(prix, 0))
+        FROM annonces WHERE suivi = 0 AND vu_le < ? GROUP BY 1, 2
+        ON CONFLICT (jour, marque) DO UPDATE SET n = n + excluded.n, somme_prix = somme_prix + excluded.somme_prix""",
+                (limite,))
+    n = con.execute("DELETE FROM annonces WHERE suivi = 0 AND vu_le < ?", (limite,)).rowcount
+    con.commit()
+    if n:
+        log(f"Compactage : {n} anciennes annonces non suivies résumées")
+
+
+def main():
+    con = ouvrir_base()
+    v = Vinted()
+    r = v.get("/")
+    log("Accueil :", r.status_code if r is not None else "erreur")
+    vues, nouvelles = nouvelles_annonces(v, con)
+    log(f"Nouvelles annonces : {nouvelles} (sur {vues} vues)")
+    faits, ventes = controles(v, con)
+    note = "bloqué par Vinted" if v.bloque() else ""
+    con.execute("INSERT INTO releves VALUES (?,?,?,?,?,?,?,?)",
+                (int(DEBUT), round(time.time() - DEBUT, 1), nouvelles, vues, faits, ventes, v.blocages, note))
+    con.commit()
+    en_attente = con.execute("SELECT COUNT(*) FROM annonces WHERE prochain_controle IS NOT NULL "
+                             "AND prochain_controle <= ?", (int(time.time()),)).fetchone()[0]
+    log(f"Contrôles en retard : {en_attente}")
+    compacter(con)
+    con.close()
+    if vues == 0:
+        log("ÉCHEC : aucune annonce lue (Vinted a peut-être changé son site ou bloque).")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

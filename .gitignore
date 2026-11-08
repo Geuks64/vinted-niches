@@ -1,0 +1,5 @@
+vinted.db
+vinted.db.gz
+sauvegarde.db.gz
+site/stats.json
+__pycache__/

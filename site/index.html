@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Niches Vinted</title>
+<meta name="theme-color" content="#0f766e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M8 22l5-7 4 4 7-10' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ---------- Couleurs (clair / sombre) ---------- */
+:root {
+  color-scheme: light;
+  --fond: #f6f6f4;
+  --carte: #fcfcfb;
+  --bord: #e3e2de;
+  --texte: #0b0b0b;
+  --texte-2: #52514e;
+  --texte-3: #7a7974;
+  --accent: #0f766e;
+  --accent-doux: #d9efec;
+  --barre: #2a78d6;        /* barres de magnitude (une seule teinte) */
+  --barre-fond: #e8eef7;
+  --bon: #0f7b3e;
+  --alerte: #a15c00;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --fond: #121211;
+    --carte: #1a1a19;
+    --bord: #2e2d2b;
+    --texte: #f0efec;
+    --texte-2: #c3c2b7;
+    --texte-3: #94938b;
+    --accent: #2bb3a5;
+    --accent-doux: #12312e;
+    --barre: #3987e5;
+    --barre-fond: #22303f;
+    --bon: #4cc47e;
+    --alerte: #e0a33a;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --fond: #121211; --carte: #1a1a19; --bord: #2e2d2b; --texte: #f0efec; --texte-2: #c3c2b7;
+  --texte-3: #94938b; --accent: #2bb3a5; --accent-doux: #12312e; --barre: #3987e5;
+  --barre-fond: #22303f; --bon: #4cc47e; --alerte: #e0a33a;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--fond); color: var(--texte);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+header {
+  position: sticky; top: 0; z-index: 5; background: var(--fond);
+  padding: calc(10px + env(safe-area-inset-top)) 16px 0; border-bottom: 1px solid var(--bord);
+}
+h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: -0.01em; }
+.maj { color: var(--texte-3); font-size: 12.5px; margin-bottom: 8px; }
+nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+nav button {
+  flex: none; border: 0; background: none; color: var(--texte-2); font: inherit; font-weight: 600;
+  padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer;
+}
+nav button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+main { padding: 14px 16px 40px; max-width: 980px; margin: 0 auto; }
+section[hidden] { display: none; }
+
+/* Tuiles de chiffres clés */
+.tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.tuile { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 10px 12px; }
+.tuile b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.tuile span { color: var(--texte-2); font-size: 12.5px; }
+
+/* Filtres */
+.filtres { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.filtres select, .filtres input {
+  font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--bord);
+  border-radius: 10px; padding: 8px 10px; min-width: 0;
+}
+.filtres input { flex: 1 1 180px; }
+.aide { color: var(--texte-2); font-size: 13px; margin: 0 0 12px; }
+.aide summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+
+/* Liste des niches */
+.niche {
+  background: var(--carte); border: 1px solid var(--bord); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.niche .haut { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.niche .nom { font-weight: 600; overflow-wrap: anywhere; }
+.niche .score { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.jauge { height: 8px; background: var(--barre-fond); border-radius: 4px; margin: 6px 0 8px; overflow: hidden; }
+.jauge i { display: block; height: 100%; background: var(--barre); border-radius: 0 4px 4px 0; }
+.chiffres { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--texte-2); }
+.chiffres b { color: var(--texte); font-variant-numeric: tabular-nums; }
+.vide { color: var(--texte-2); background: var(--carte); border: 1px dashed var(--bord); border-radius: 12px; padding: 16px; }
+
+/* Cartes d'annonces (ventes, tendances) */
+.grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.annonce {
+  background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; overflow: hidden;
+  color: inherit; text-decoration: none; display: flex; flex-direction: column;
+}
+.annonce img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--barre-fond); display: block; }
+.annonce .info { padding: 8px 10px; font-size: 13px; }
+.annonce .t { font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.annonce .p { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.annonce .m { color: var(--texte-2); }
+.badge { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 99px;
+  background: var(--accent-doux); color: var(--accent); margin-top: 4px; }
+
+/* Tableau d'état */
+table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--carte); border-radius: 12px; overflow: hidden; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--bord); font-variant-numeric: tabular-nums; }
+th { color: var(--texte-2); font-weight: 600; }
+.defile { overflow-x: auto; border: 1px solid var(--bord); border-radius: 12px; margin-bottom: 14px; }
+h2 { font-size: 16px; margin: 18px 0 8px; }
+.ok { color: var(--bon); font-weight: 600; }
+.ko { color: var(--alerte); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Niches Vinted</h1>
+  <div class="maj" id="maj">Chargement…</div>
+  <nav role="tablist">
+    <button role="tab" data-onglet="niches" aria-selected="true">Niches</button>
+    <button role="tab" data-onglet="ventes" aria-selected="false">Ventes en direct</button>
+    <button role="tab" data-onglet="chaudes" aria-selected="false">Annonces qui plaisent</button>
+    <button role="tab" data-onglet="etat" aria-selected="false">Relevé</button>
+  </nav>
+</header>
+
+<main>
+  <section id="niches">
+    <div class="tuiles" id="tuiles"></div>
+    <div class="filtres">
+      <select id="type" aria-label="Regrouper par">
+        <option value="categorie">Par catégorie</option>
+        <option value="marque">Par marque</option>
+        <option value="categorie_marque">Catégorie + marque</option>
+        <option value="categorie_prix">Catégorie + prix</option>
+      </select>
+      <select id="tri" aria-label="Trier par">
+        <option value="score">Tri : score niche</option>
+        <option value="taux_24h">Tri : % vendu en 24 h</option>
+        <option value="taux_3j">Tri : % vendu en 3 j</option>
+        <option value="taux_7j">Tri : % vendu en 7 j</option>
+        <option value="prix_vendu">Tri : prix de vente</option>
+        <option value="n">Tri : nb d'annonces suivies</option>
+      </select>
+      <input id="cherche" type="search" placeholder="Filtrer (ex. robe, nike, 20–40)" aria-label="Filtrer">
+    </div>
+    <details class="aide">
+      <summary>Comment lire ces chiffres ?</summary>
+      <p>L'outil relève les nouvelles annonces Vinted toutes les 20 min et en suit une partie au hasard :
+      il revient voir chaque annonce suivie après 6 h, 24 h, 3 j et 7 j pour savoir si elle est vendue.</p>
+      <p><b>% vendu en 24 h / 3 j / 7 j</b> : part des annonces vendues dans ce délai (calculé seulement
+      quand l'échantillon est assez grand). <b>Score niche</b> : le meilleur de ces pourcentages, réduit
+      quand il y a peu d'annonces (pour éviter les faux bons plans). <b>Offre 7 j</b> (marques) :
+      nombre de nouvelles annonces vues sur 7 jours — beaucoup de ventes + peu d'offre = bonne niche.</p>
+      <p>Les premiers chiffres apparaissent après ~24 h de relevé, et deviennent fiables après une semaine.</p>
+    </details>
+    <div id="liste"></div>
+  </section>
+
+  <section id="ventes" hidden>
+    <p class="aide">Dernières ventes détectées parmi les annonces suivies (la plus récente en premier).</p>
+    <div class="grille" id="grille-ventes"></div>
+  </section>
+
+  <section id="chaudes" hidden>
+    <p class="aide">Annonces des dernières 48 h qui gagnent le plus de favoris par heure — signe d'une forte demande.</p>
+    <div class="grille" id="grille-chaudes"></div>
+  </section>
+
+  <section id="etat" hidden>
+    <div class="tuiles" id="tuiles-etat"></div>
+    <h2>Derniers relevés</h2>
+    <div class="defile"><table id="table-releves"></table></div>
+    <h2>Indicateurs lus sur les pages (contrôle technique)</h2>
+    <div class="defile"><table id="table-bruts"></table></div>
+  </section>
+</main>
+
+<script>
+// ---------- utilitaires
+const $ = (s) => document.querySelector(s);
+const fmt = (x, suf = "") => (x === null || x === undefined) ? "—" : `${String(x).replace(".", ",")}${suf}`;
+const euros = (x) => (x === null || x === undefined) ? "—" : `${Number(x).toFixed(2).replace(".", ",")} €`;
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const quand = (ts) => {
+  if (!ts) return "—";
+  const min = Math.round((Date.now() / 1000 - ts) / 60);
+  if (min < 1) return "à l'instant";
+  if (min < 60) return `il y a ${min} min`;
+  if (min < 48 * 60) return `il y a ${Math.round(min / 60)} h`;
+  return `il y a ${Math.round(min / 1440)} j`;
+};
+const delai = (a, b) => {
+  const t = (h) => h < 24 ? `${h} h` : `${Math.round(h / 24)} j`;
+  if (b === null || b === undefined) return "";
+  return !a ? `en moins de ${t(b)}` : `entre ${t(a)} et ${t(b)}`;
+};
+
+let S = null;
+
+// ---------- onglets
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach((x) => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("main section").forEach((s) => s.hidden = s.id !== b.dataset.onglet);
+  try { localStorage.setItem("onglet", b.dataset.onglet); } catch (e) {}
+}));
+
+// ---------- niches
+function afficherNiches() {
+  const type = $("#type").value, tri = $("#tri").value;
+  const q = $("#cherche").value.trim().toLowerCase();
+  let lignes = (S.segments[type] || []).filter((l) => !q || l.nom.toLowerCase().includes(q));
+  lignes = [...lignes].sort((a, b) => (b[tri] ?? -1) - (a[tri] ?? -1));
+  if (!lignes.length) {
+    $("#liste").innerHTML = `<div class="vide">Pas encore assez de données ici. Les premières niches apparaissent
+      après environ 24 h de relevé (il faut au moins ${S.reglages.n_min} annonces suivies par groupe).</div>`;
+    return;
+  }
+  const max = Math.max(1, ...lignes.map((l) => l.score || 0));
+  $("#liste").innerHTML = lignes.slice(0, 150).map((l) => `
+    <div class="niche">
+      <div class="haut"><span class="nom">${esc(l.nom)}</span>
+        <span class="score" title="Score niche (fenêtre ${l.fenetre || "—"})">${fmt(l.score)}</span></div>
+      <div class="jauge" title="Score ${fmt(l.score)}"><i style="width:${Math.round(100 * (l.score || 0) / max)}%"></i></div>
+      <div class="chiffres">
+        <span>24 h <b>${fmt(l.taux_24h, " %")}</b></span>
+        <span>3 j <b>${fmt(l.taux_3j, " %")}</b></span>
+        <span>7 j <b>${fmt(l.taux_7j, " %")}</b></span>
+        <span>délai médian <b>${l.delai_h == null ? "—" : (l.delai_h < 24 ? Math.round(l.delai_h) + " h" : Math.round(l.delai_h / 24) + " j")}</b></span>
+        <span>prix vendu <b>${euros(l.prix_vendu)}</b></span>
+        <span>prix annonces <b>${euros(l.prix)}</b></span>
+        <span>suivies <b>${l.n}</b> · vendues <b>${l.vendues}</b></span>
+        ${l.offre_7j !== undefined ? `<span>offre 7 j <b>${l.offre_7j}</b></span>` : ""}
+      </div>
+    </div>`).join("");
+}
+["type", "tri"].forEach((id) => $("#" + id).addEventListener("change", afficherNiches));
+$("#cherche").addEventListener("input", afficherNiches);
+
+// ---------- cartes d'annonces
+function carte(a, vente) {
+  const prix = vente && a.prix_final ? a.prix_final : a.prix;
+  return `<a class="annonce" href="https://www.vinted.fr${esc(a.url || "/items/" + a.id)}" target="_blank" rel="noopener">
+    <img loading="lazy" src="${esc(a.miniature)}" alt="">
+    <div class="info">
+      <div class="t">${esc(a.titre)}</div>
+      <div class="p">${euros(prix)}</div>
+      <div class="m">${esc([a.marque, a.taille, a.etat].filter(Boolean).join(" · "))}</div>
+      <div class="m">${esc(a.categorie || "")}</div>
+      ${vente ? `<span class="badge">Vendu ${esc(delai(a.vendu_apres_h, a.vendu_avant_h))}</span>`
+              : `<span class="badge">${a.favoris} ♥ · ${esc(quand(a.vu_le))}</span>`}
+    </div></a>`;
+}
+
+// ---------- état du relevé
+function afficherEtat() {
+  const r = S.resume, st = r.statuts || {};
+  $("#tuiles-etat").innerHTML = [
+    [r.annonces_vues, "annonces vues"], [r.suivies, "annonces suivies"], [st.vendu || 0, "ventes détectées"],
+    [st.en_vente || 0, "toujours en vente"], [st.supprime || 0, "supprimées"], [r.controles_en_retard, "contrôles en retard"],
+  ].map(([v, t]) => `<div class="tuile"><b>${v ?? 0}</b><span>${t}</span></div>`).join("");
+  $("#table-releves").innerHTML = `<tr><th>Début</th><th>Durée</th><th>Vues</th><th>Nouvelles</th><th>Contrôles</th><th>Ventes</th><th>État</th></tr>` +
+    S.releves.map((x) => `<tr><td>${new Date(x.debut * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+      <td>${Math.round(x.duree / 60)} min</td><td>${x.vues}</td><td>${x.nouvelles}</td><td>${x.controles}</td><td>${x.ventes}</td>
+      <td class="${x.note ? "ko" : "ok"}">${x.note ? esc(x.note) : (x.blocages ? x.blocages + " refus" : "OK")}</td></tr>`).join("");
+  $("#table-bruts").innerHTML = `<tr><th>Indicateurs</th><th>Annonces</th></tr>` +
+    (S.indicateurs_bruts.length ? S.indicateurs_bruts.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")
+      : `<tr><td colspan="2">Aucun contrôle encore effectué (premiers contrôles 6 h après le lancement).</td></tr>`);
+}
+
+// ---------- chargement
+async function charger() {
+  try {
+    const r = await fetch("stats.json?t=" + Date.now(), { cache: "no-store" });
+    S = await r.json();
+  } catch (e) {
+    $("#maj").textContent = "Pas encore de données : le premier relevé n'est pas terminé.";
+    return;
+  }
+  $("#maj").textContent = `Mis à jour ${quand(S.genere_le)}` + (S.depuis ? ` · relevé lancé ${quand(S.depuis)}` : "");
+  const st = S.resume.statuts || {};
+  $("#tuiles").innerHTML = [
+    [S.resume.annonces_vues, "annonces vues"], [S.resume.suivies, "annonces suivies"], [st.vendu || 0, "ventes détectées"],
+  ].map(([v, t]) => `<div class="tuile"><b>${v ?? 0}</b><span>${t}</span></div>`).join("");
+  afficherNiches();
+  $("#grille-ventes").innerHTML = S.ventes.length ? S.ventes.map((a) => carte(a, true)).join("")
+    : `<div class="vide">Aucune vente détectée pour l'instant (premiers contrôles 6 h après le lancement).</div>`;
+  $("#grille-chaudes").innerHTML = S.chaudes.length ? S.chaudes.map((a) => carte(a, false)).join("")
+    : `<div class="vide">Pas encore de données (premiers contrôles 6 h après le lancement).</div>`;
+  afficherEtat();
+}
+try {
+  const o = localStorage.getItem("onglet");
+  if (o) document.querySelector(`nav button[data-onglet="${o}"]`)?.click();
+} catch (e) {}
+charger();
+setInterval(charger, 5 * 60 * 1000);   // se rafraîchit seul toutes les 5 min
+</script>
+</body>
+</html>
