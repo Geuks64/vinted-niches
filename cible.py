@@ -21,6 +21,13 @@ def sans_marque(marque, titre):
     return not m or m in MARQUES_VIDES or m == simplifier(titre)
 
 
+# Catégories sans intérêt pour l'achat en Chine : livres, CD, films… n'ont jamais de « marque » sur Vinted,
+# ils passeraient tous pour « sans marque » (constaté le 2026-11-08 : les 3 catégories cibles les plus vues).
+CATEGORIES_EXCLUES = ("Livres et médias",)
+
+
 def est_cible(a):
-    """Neuf (avec ou sans étiquette) ET sans marque."""
+    """Neuf (avec ou sans étiquette) ET sans marque, hors livres / médias (si la catégorie est connue)."""
+    if str(a.get("categorie") or "").startswith(CATEGORIES_EXCLUES):
+        return False
     return simplifier(a.get("etat")).startswith("neuf") and sans_marque(a.get("marque"), a.get("titre"))
