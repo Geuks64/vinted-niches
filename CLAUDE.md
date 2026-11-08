@@ -60,10 +60,17 @@
   Recherche : issue « Recherche : X » ouverte par le propriétaire → `recherche.yml` → `recherches/<n>.json`
   (commité) + commentaire ; `collecte.suivre_recherches()` ajoute ses annonces fraîches au suivi (colonne
   `annonces.recherche`).
-- **Lot 1 (2026-11-08, validé par l'utilisateur avant le lot 2)** : base CHIFFRÉE dans la Release (`vinted.db.gz.enc`,
-  AES-256, clé = secret `NICHES_CLE`, script `base.sh` : chiffrer / dechiffrer / verifier). Sauvegardes :
-  `precedente.db.gz.enc` (base d'avant chaque relevé), `avant-lot1.db.gz.enc` (permanente), `sauvegarde-AAAA-MM-JJ`
-  (14 jours). Les copies en clair `vinted.db.gz` sont supprimées après publication chiffrée vérifiée.
+- **Chiffrement v2 (2026-11-08)** : AES-256-GCM AUTHENTIFIÉ (`chiffrage.py`, bibliothèque `cryptography==44.0.0`),
+  appelé par `base.sh` (chiffrer / dechiffrer = v2 ; dechiffrer_v1 = lecture seule de l'ancien format CBC).
+  Format : « NICHESv2 » + itérations PBKDF2 (600 000) + sel 16 o + nonce 12 o (nouveaux à chaque fichier) + données
+  + étiquette 16 o ; tout l'en-tête est authentifié (données associées GCM). Même secret `NICHES_CLE`.
+  Fichiers de la Release : `vinted.v2.gcm`, `precedente.v2.gcm`, `sauvegarde-AAAA-MM-JJ.v2.gcm` (vers 3 h UTC).
+  Lecture : v2 en priorité ; si la v2 échoue à l'authentification -> ARRÊT (jamais de repli sur la v1) ;
+  v1 seulement s'il n'existe aucune v2 ; Release vide ou illisible -> arrêt (jamais « base vide »).
+  **Les fichiers v1 (`vinted.db.gz.enc`, `precedente.db.gz.enc`, `avant-lot1.db.gz.enc`) ne sont plus jamais écrits
+  ni supprimés. Aucune suppression automatique de sauvegarde. Ne rien supprimer sans accord EXPLICITE de
+  l'utilisateur** (condition posée : au moins 3 relevés v2 réussis + 1 restauration réelle vérifiée).
+- **Lot 1 (2026-11-08)** : sauvegardes chiffrées dans la Release (voir ci-dessus).
   Schéma versionné (`PRAGMA user_version` = 2, `migrer()`), table `observations` (chaque lecture, jamais écrasée),
   stats : intervalles de Wilson (`ic_*`), `confiance` (0-100 = 100 − 2 × largeur de l'intervalle), `n_utilisees`,
   verdict `a_confirmer` sous 30 annonces, indice = 50 + confiance/100 × (brut − 50), vue « Particuliers » (pro = 0).

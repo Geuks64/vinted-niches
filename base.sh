@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Outils de la base SQLite (utilisés par les workflows) :
-#   bash base.sh verifier  vinted.db                    -> PRAGMA integrity_check (échoue si la base est abîmée)
-#   bash base.sh chiffrer  vinted.db  vinted.db.gz.enc  -> compresse + chiffre (AES-256, clé = secret NICHES_CLE)
-#   bash base.sh dechiffrer vinted.db.gz.enc vinted.db  -> déchiffre + décompresse + vérifie
+#   bash base.sh verifier      vinted.db                     -> PRAGMA integrity_check (échoue si la base est abîmée)
+#   bash base.sh chiffrer      vinted.db  vinted.v2.gcm      -> format v2 : AES-256-GCM AUTHENTIFIÉ (voir chiffrage.py)
+#   bash base.sh dechiffrer    vinted.v2.gcm vinted.db       -> v2 : authentifie, déchiffre, vérifie l'intégrité
+#   bash base.sh dechiffrer_v1 vinted.db.gz.enc vinted.db    -> ANCIEN format v1 (AES-256-CBC, non authentifié),
+#                                                               lecture seule des anciennes sauvegardes
 # La clé est lue dans la variable d'environnement NICHES_CLE (jamais écrite dans les journaux).
+# Aucun repli automatique : si un fichier v2 échoue à l'authentification, la commande échoue (code 3).
 set -euo pipefail
+ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 cle_presente() {
   if [ -z "${NICHES_CLE:-}" ]; then
@@ -26,13 +30,25 @@ sys.exit(0 if r == "ok" else 1)
 PY
 }
 
-chiffrer() {   # $1 = base SQLite en clair, $2 = fichier chiffré produit
+chiffrer() {   # $1 = base SQLite en clair, $2 = fichier v2 produit
   cle_presente
-  gzip -c "$1" | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:NICHES_CLE -out "$2"
+  python3 "$ICI/chiffrage.py" chiffrer "$1" "$2"
 }
 
-dechiffrer() {  # $1 = fichier chiffré, $2 = base SQLite en clair produite
+dechiffrer() {  # $1 = fichier v2, $2 = base SQLite en clair produite (seulement si tout est valide)
   cle_presente
+  rm -f "$2.tmp"
+  if ! python3 "$ICI/chiffrage.py" dechiffrer "$1" "$2.tmp"; then
+    rm -f "$2.tmp"
+    exit 3
+  fi
+  verifier "$2.tmp"
+  mv "$2.tmp" "$2"
+}
+
+dechiffrer_v1() {  # ancien format (lecture seule) : AES-256-CBC + PBKDF2, sans authentification
+  cle_presente
+  rm -f "$2.tmp"
   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:NICHES_CLE -in "$1" | gunzip -c > "$2.tmp"
   verifier "$2.tmp"
   mv "$2.tmp" "$2"

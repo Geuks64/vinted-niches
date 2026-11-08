@@ -8,3 +8,5 @@ sauvegarde.db.gz
 site/stats.json
 __pycache__/
 commentaire.md
+*.gcm
+*.gcm.tmp
