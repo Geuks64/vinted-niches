@@ -1,0 +1,27 @@
+# TEST manuel, lecture seule : suivi des annonces par les listes filtrées du catalogue (voir diag_catalogue.py).
+# Ne tourne jamais en même temps que la collecte d'un relevé. La base est lue, jamais modifiée ni publiée.
+name: Test catalogue filtré
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NICHES_CLE: ${{ secrets.NICHES_CLE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -q curl_cffi cryptography==44.0.0
+      - name: Base (lecture seule)
+        run: |
+          bash base.sh cle_presente
+          gh release download donnees -p vinted.v2.gcm --clobber
+          bash base.sh dechiffrer vinted.v2.gcm vinted.db
+      - name: Test
+        run: python diag_catalogue.py
