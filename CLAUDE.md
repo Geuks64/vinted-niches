@@ -23,10 +23,17 @@
   `catalog_id`, `breadcrumbs` (chemin de catégorie), JSON-LD `offers.availability` (`InStock` si en vente).
 - **Annonce vendue (constaté le 2026-11-08 via le rattrapage)** : `can_buy=false`, `instant_buy=false`, ni
   `is_reserved` ni `is_hidden`, et plus de fiche JSON-LD (pas d'`availability`, pas de prix ni de titre JSON-LD →
-  titre via `og:title`, prix via le bloc `"price":{"amount":...}`). `statut_depuis()` classe ce cas en « vendu ».
-  Hypothèse probable mais à confirmer (le mode vacances d'un vendeur pourrait donner la même chose) : les clés
-  contenant sold/closed/transaction sont maintenant gardées dans `brut` pour vérifier. `reclasser()` réapplique
-  la règle à toutes les lignes à chaque relevé.
+  titre via `og:title`, prix via le bloc `"price":{"amount":...}`).
+- **États (lot 1)** : `vendu_probable` (signature de vente, 1 lecture), `vendu` (signal explicite ou signature revue
+  12 h plus tard = contrôle de confirmation), `indisponible` (can_buy=false mais JSON-LD encore InStock : vacances ?
+  jamais compté), `supprime`/`masque`/`inconnu` (exclus des stats). `reclasser()` ne rétrograde jamais un `vendu`.
+- **Pays du vendeur : NON disponible** (vérifié le 2026-11-08) : les pages n'ont que `ipCountry` (= pays du
+  VISITEUR, le serveur GitHub, « us ») et `countryCode` (« int », version du site) -> ignorés. Vue « France » vide.
+- **Badge « En demande » : NON disponible** dans les données lisibles (cartes : `itemBox.badge` = `$undefined` ;
+  pages : seulement des textes de traduction « Badge Pro », « Dressing au top »).
+- **Vendeur pro** : clé `business` (true/false) sur la page d'une annonce ; `user.isBusiness` sur les cartes.
+- **Limite de débit** : des réponses 429 sont apparues à 4 s entre requêtes avec relevés enchaînés -> 5 s et
+  pause de 60 s après un 429. Ne pas augmenter la cadence.
 
 ## État en cours
 
@@ -53,6 +60,14 @@
   Recherche : issue « Recherche : X » ouverte par le propriétaire → `recherche.yml` → `recherches/<n>.json`
   (commité) + commentaire ; `collecte.suivre_recherches()` ajoute ses annonces fraîches au suivi (colonne
   `annonces.recherche`).
+- **Lot 1 (2026-11-08, validé par l'utilisateur avant le lot 2)** : base CHIFFRÉE dans la Release (`vinted.db.gz.enc`,
+  AES-256, clé = secret `NICHES_CLE`, script `base.sh` : chiffrer / dechiffrer / verifier). Sauvegardes :
+  `precedente.db.gz.enc` (base d'avant chaque relevé), `avant-lot1.db.gz.enc` (permanente), `sauvegarde-AAAA-MM-JJ`
+  (14 jours). Les copies en clair `vinted.db.gz` sont supprimées après publication chiffrée vérifiée.
+  Schéma versionné (`PRAGMA user_version` = 2, `migrer()`), table `observations` (chaque lecture, jamais écrasée),
+  stats : intervalles de Wilson (`ic_*`), `confiance` (0-100 = 100 − 2 × largeur de l'intervalle), `n_utilisees`,
+  verdict `a_confirmer` sous 30 annonces, indice = 50 + confiance/100 × (brut − 50), vue « Particuliers » (pro = 0).
+  NE PAS commencer le lot 2 (mots qui font vendre, prix d'achat max, tendances) sans accord de l'utilisateur.
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

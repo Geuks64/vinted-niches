@@ -116,6 +116,8 @@ def pays_de(a):
         return None
     b = json.loads(a["brut"])
     for k, v in b.items():
+        if k in ("ipCountry", "countryCode"):   # pays du visiteur / version du site, pas du vendeur
+            continue
         if "country" in k.lower() and isinstance(v, str):
             if len(v) == 2 and v.isalpha():
                 return v.upper()
@@ -325,7 +327,8 @@ def main():
     for a in suivies + ratt:
         if a["brut"]:
             b = json.loads(a["brut"])
-            cle = ", ".join(f"{k}={b[k]}" for k in sorted(b) if k not in ("favourite_count", "catalog_id", "city"))
+            cle = ", ".join(f"{k}={b[k]}" for k in sorted(b)
+                            if k not in ("favourite_count", "catalog_id", "city", "ipCountry", "countryCode"))
             combos[cle] += 1
     vues_total = con.execute("SELECT COUNT(*) FROM annonces").fetchone()[0] + \
         (con.execute("SELECT COALESCE(SUM(n), 0) FROM offre_jour").fetchone()[0])

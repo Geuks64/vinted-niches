@@ -33,7 +33,7 @@ ENTETES = {"User-Agent": UA, "Accept-Language": "fr-FR,fr;q=0.9"}
 DB = os.environ.get("NICHES_DB", "vinted.db")
 PAGES = int(os.environ.get("NICHES_PAGES", "6"))            # pages de catalogue par relevé (96 annonces/page)
 TAUX_SUIVI = float(os.environ.get("NICHES_TAUX", "0.07"))    # part des nouvelles annonces suivies
-PAUSE = float(os.environ.get("NICHES_PAUSE", "4"))           # secondes entre deux requêtes
+PAUSE = float(os.environ.get("NICHES_PAUSE", "5"))           # secondes entre deux requêtes
 DUREE_MAX = float(os.environ.get("NICHES_DUREE", "780"))     # durée max d'un relevé (s)
 CONTROLES_H = [6, 24, 72, 168]                               # quand revenir voir une annonce suivie
 RATTRAPAGE_MAX = int(os.environ.get("NICHES_RATTRAPAGE", "120"))  # anciennes annonces vues par relevé (max)
@@ -251,7 +251,11 @@ def lire_annonce(html):
         m = re.search(r'"' + cle + r'":\s*("[^"]*"|true|false|null|-?\d+(?:\.\d+)?)', f)
         if m:
             brut[cle] = json.loads(m.group(1))
+    # ipCountry = pays du VISITEUR (le serveur GitHub) et countryCode = version du site (« int ») :
+    # ce ne sont PAS le pays du vendeur -> ignorés (constaté le 2026-11-08)
     for m in re.finditer(r'"(\w*(?:[cC]ountry|[cC]ity)\w*)":\s*("[^"]{1,40}"|\d+)', f):
+        if m.group(1) in ("ipCountry", "countryCode"):
+            continue
         if m.group(1) not in brut and len(brut) < 25:
             brut[m.group(1)] = json.loads(m.group(2))
     m = re.search(r'"(?:badge|itemBadge|item_badge)":\s*(\{[^{}]{0,200}\}|"[^"$][^"]{0,40}")', f)
@@ -408,6 +412,9 @@ class Vinted:
         if r.status_code in (403, 429):
             self.blocages += 1
             log(f"  {r.status_code} sur {chemin} (blocage n°{self.blocages})")
+            if r.status_code == 429:
+                # « trop de requêtes » : on respecte la limite, pause d'une minute avant de continuer
+                time.sleep(60)
         return r
 
     def bloque(self):
@@ -600,11 +607,6 @@ def rattrapage(v, con):
             absentes += 1
             continue
         brut, categorie, prix, d = lire_annonce(r.text)
-        if montres == 0:
-            f = flux_next(r.text)
-            for mot in ("ountry", "badge", "Badge", "location", "demand"):
-                extraits = [f[max(0, x.start() - 80): x.end() + 80] for x in re.finditer(mot, f)][:3]
-                log(f"  [diagnostic] « {mot} » : {extraits}")
         statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
         cat_id = brut.get("catalog_id")
         con.execute("""INSERT OR IGNORE INTO rattrapage (id, verifie_le, age_vise_h, age_h, statut, titre, marque,
