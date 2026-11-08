@@ -70,6 +70,11 @@
   **Les fichiers v1 (`vinted.db.gz.enc`, `precedente.db.gz.enc`, `avant-lot1.db.gz.enc`) ne sont plus jamais écrits
   ni supprimés. Aucune suppression automatique de sauvegarde. Ne rien supprimer sans accord EXPLICITE de
   l'utilisateur** (condition posée : au moins 3 relevés v2 réussis + 1 restauration réelle vérifiée).
+- **Sauvegardes (état du 2026-11-08, 15 h UTC, vérifiées par `verifier-sauvegardes.yml` : 6/6 restaurables)** :
+  v2 `vinted.v2.gcm`, `precedente.v2.gcm` (mises à jour à chaque relevé), `avant-lot1.v2.gcm` (copie v2 de
+  avant-lot1, créée par `copie-avant-lot1.yml`, identique octet par octet) ; v1 figées : `vinted.db.gz.enc`,
+  `precedente.db.gz.enc`, `avant-lot1.db.gz.enc`. Workflows manuels : `verifier-sauvegardes.yml` (lecture seule,
+  à relancer quand on veut), `copie-avant-lot1.yml` (usage unique, refuse de réécraser).
 - **Lot 1 (2026-11-08)** : sauvegardes chiffrées dans la Release (voir ci-dessus).
   Schéma versionné (`PRAGMA user_version` = 2, `migrer()`), table `observations` (chaque lecture, jamais écrasée),
   stats : intervalles de Wilson (`ic_*`), `confiance` (0-100 = 100 − 2 × largeur de l'intervalle), `n_utilisees`,
