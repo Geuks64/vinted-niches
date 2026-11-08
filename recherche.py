@@ -123,6 +123,9 @@ def main():
         s_ok, r_ok = [a for a in suivies if colle(a)], [a for a in ratt if colle(a)]
         if s_ok or r_ok:
             historique = stats.segment_stats(s_ok, maintenant, r_ok)
+        if historique and historique["n"] == 0:
+            historique = None
+        if historique:
             historique["exemples"] = [{"titre": a["titre"], "prix": a["prix"], "statut": a["statut"]}
                                       for a in (s_ok + r_ok)[:8]]
         glob = stats.segment_stats(suivies, maintenant, ratt)
