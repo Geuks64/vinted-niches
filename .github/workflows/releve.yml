@@ -39,19 +39,14 @@ jobs:
           bash base.sh cle_presente
           # Liste des fichiers de la Release : si GitHub ne répond pas, on S'ARRÊTE (jamais « base vide » par erreur)
           actifs=$(gh release view donnees --json assets --jq '.assets[].name')
-          if echo "$actifs" | grep -qx vinted.v2.gcm; then
-            # Format v2 (AES-256-GCM authentifié). Échec d'authentification = arrêt immédiat, AUCUN repli sur la v1.
-            gh release download donnees -p vinted.v2.gcm --clobber
-            bash base.sh dechiffrer vinted.v2.gcm vinted.db
-          elif echo "$actifs" | grep -qx vinted.db.gz.enc; then
-            # Migration : aucune v2 n'existe encore -> on part de la dernière v1 (qui reste intacte dans la Release)
-            echo "Migration v1 -> v2 : lecture de la base v1 (elle ne sera ni modifiée ni supprimée)."
-            gh release download donnees -p vinted.db.gz.enc --clobber
-            bash base.sh dechiffrer_v1 vinted.db.gz.enc vinted.db
-          else
-            echo "ERREUR : aucune base trouvée dans la Release « donnees » (ni v2 ni v1). Arrêt par sécurité." >&2
+          if ! echo "$actifs" | grep -qx vinted.v2.gcm; then
+            echo "ERREUR : vinted.v2.gcm absent de la Release « donnees ». Arrêt (aucun autre format accepté)." >&2
+            echo "Pour repartir d'une sauvegarde : workflow « Restaurer une sauvegarde »." >&2
             exit 1
           fi
+          # Format v2 (AES-256-GCM authentifié). Échec d'authentification ou d'intégrité = arrêt immédiat.
+          gh release download donnees -p vinted.v2.gcm --clobber
+          bash base.sh dechiffrer vinted.v2.gcm vinted.db
           # copie de la base AVANT ce relevé (sauvegarde « precedente » publiée chiffrée à la fin)
           cp vinted.db avant.db
 
@@ -78,13 +73,14 @@ jobs:
           cmp avant.db controle-avant.db && echo "Sauvegarde « precedente » v2 vérifiée."
           gh release upload donnees precedente.v2.gcm --clobber
           gh release upload donnees vinted.v2.gcm --clobber
-          # Sauvegarde datée une fois par jour (vers 3 h UTC). AUCUNE suppression automatique d'ancienne sauvegarde.
-          if [ "$(date -u +%H)" = "03" ]; then
-            cp vinted.v2.gcm "sauvegarde-$(date -u +%F).v2.gcm"
-            gh release upload donnees "sauvegarde-$(date -u +%F).v2.gcm" --clobber
+          # Sauvegarde du jour : créée par le premier relevé de chaque jour (UTC) qui ne la trouve pas.
+          # Jamais écrasée (pas de --clobber). Le workflow « Sauvegarde du jour » fait la même chose indépendamment.
+          du_jour="sauvegarde-$(date -u +%F).v2.gcm"
+          if ! gh release view donnees --json assets --jq '.assets[].name' | grep -qx "$du_jour"; then
+            cp vinted.v2.gcm "$du_jour"
+            gh release upload donnees "$du_jour" && echo "Sauvegarde du jour créée : $du_jour" \
+              || echo "Sauvegarde du jour non créée par ce relevé (peut-être créée au même moment par l'autre workflow)."
           fi
-          # Les anciennes copies v1 (vinted.db.gz.enc, precedente.db.gz.enc, avant-lot1.db.gz.enc) ne sont plus
-          # jamais écrites ni supprimées par ce workflow.
 
       - name: Garder le relevé actif
         # GitHub coupe les tâches planifiées après 60 jours sans commit : un petit commit par mois.

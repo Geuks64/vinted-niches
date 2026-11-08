@@ -3,10 +3,8 @@
 #   bash base.sh verifier      vinted.db                     -> PRAGMA integrity_check (échoue si la base est abîmée)
 #   bash base.sh chiffrer      vinted.db  vinted.v2.gcm      -> format v2 : AES-256-GCM AUTHENTIFIÉ (voir chiffrage.py)
 #   bash base.sh dechiffrer    vinted.v2.gcm vinted.db       -> v2 : authentifie, déchiffre, vérifie l'intégrité
-#   bash base.sh dechiffrer_v1 vinted.db.gz.enc vinted.db    -> ANCIEN format v1 (AES-256-CBC, non authentifié),
-#                                                               lecture seule des anciennes sauvegardes
 # La clé est lue dans la variable d'environnement NICHES_CLE (jamais écrite dans les journaux).
-# Aucun repli automatique : si un fichier v2 échoue à l'authentification, la commande échoue (code 3).
+# Seul format accepté : v2 (AES-256-GCM). Un fichier absent, abîmé ou non authentique fait échouer la commande.
 set -euo pipefail
 ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -42,14 +40,6 @@ dechiffrer() {  # $1 = fichier v2, $2 = base SQLite en clair produite (seulement
     rm -f "$2.tmp"
     exit 3
   fi
-  verifier "$2.tmp"
-  mv "$2.tmp" "$2"
-}
-
-dechiffrer_v1() {  # ancien format (lecture seule) : AES-256-CBC + PBKDF2, sans authentification
-  cle_presente
-  rm -f "$2.tmp"
-  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:NICHES_CLE -in "$1" | gunzip -c > "$2.tmp"
   verifier "$2.tmp"
   mv "$2.tmp" "$2"
 }

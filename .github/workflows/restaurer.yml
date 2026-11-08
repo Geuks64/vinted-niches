@@ -1,0 +1,59 @@
+# Restauration MANUELLE d'une sauvegarde v2 (AES-256-GCM) comme base de production (vinted.v2.gcm).
+#
+# Cible « test-temporaire » (par défaut) : tout se passe dans une Release séparée « restauration-test »
+#   (copies des fichiers) -> la Release de production « donnees » n'est JAMAIS modifiée.
+# Cible « production » : exige de taper RESTAURER dans « confirmation ».
+#
+# Ordre des opérations (toute erreur arrête tout AVANT la moindre écriture sur la base de production) :
+#   1. la sauvegarde choisie est téléchargée, authentifiée (GCM) et vérifiée (PRAGMA integrity_check)
+#   2. (production) aucun relevé ne doit être en train d'écrire la base
+#   3. copie de sécurité de la base actuelle : avant-restauration-<date-heure>.v2.gcm (jamais écrasée)
+#   4. la sauvegarde devient vinted.v2.gcm, puis elle est retéléchargée et revérifiée
+# La base déchiffrée n'est jamais publiée : seuls des compteurs et des empreintes apparaissent dans le journal.
+name: Restaurer une sauvegarde
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Sauvegarde à restaurer"
+        type: choice
+        options: [precedente, avant-lot1, quotidienne]
+        default: precedente
+      date:
+        description: "Pour « quotidienne » seulement : date AAAA-MM-JJ"
+        required: false
+        default: ""
+      cible:
+        description: "test-temporaire (sans risque) ou production"
+        type: choice
+        options: [test-temporaire, production]
+        default: test-temporaire
+      confirmation:
+        description: "Pour la production : taper RESTAURER"
+        required: false
+        default: ""
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: restauration
+  cancel-in-progress: false
+jobs:
+  restaurer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NICHES_CLE: ${{ secrets.NICHES_CLE }}
+      # paramètres passés par variables d'environnement (jamais collés dans le script)
+      SOURCE: ${{ inputs.source }}
+      DATE_SAUVEGARDE: ${{ inputs.date }}
+      CIBLE: ${{ inputs.cible }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -q cryptography==44.0.0
+      - name: Restauration
+        run: bash restaurer.sh

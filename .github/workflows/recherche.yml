@@ -40,17 +40,15 @@ jobs:
         env:
           NICHES_CLE: ${{ secrets.NICHES_CLE }}
         run: |
+          bash base.sh cle_presente
           actifs=$(gh release view donnees --json assets --jq '.assets[].name')
-          if echo "$actifs" | grep -qx vinted.v2.gcm; then
-            # v2 : un échec d'authentification ARRÊTE la recherche (aucun repli sur la v1)
-            gh release download donnees -p vinted.v2.gcm --clobber
-            bash base.sh dechiffrer vinted.v2.gcm vinted.db
-          elif echo "$actifs" | grep -qx vinted.db.gz.enc; then
-            gh release download donnees -p vinted.db.gz.enc --clobber
-            bash base.sh dechiffrer_v1 vinted.db.gz.enc vinted.db
-          else
-            echo "Aucune base : recherche sans l'historique des ventes."
+          if ! echo "$actifs" | grep -qx vinted.v2.gcm; then
+            echo "ERREUR : vinted.v2.gcm absent de la Release « donnees ». Arrêt (aucun autre format accepté)." >&2
+            exit 1
           fi
+          # v2 : un échec d'authentification ou d'intégrité ARRÊTE la recherche
+          gh release download donnees -p vinted.v2.gcm --clobber
+          bash base.sh dechiffrer vinted.v2.gcm vinted.db
 
       - name: Analyse
         run: python recherche.py

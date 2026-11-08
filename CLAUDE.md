@@ -60,21 +60,22 @@
   Recherche : issue « Recherche : X » ouverte par le propriétaire → `recherche.yml` → `recherches/<n>.json`
   (commité) + commentaire ; `collecte.suivre_recherches()` ajoute ses annonces fraîches au suivi (colonne
   `annonces.recherche`).
-- **Chiffrement v2 (2026-11-08)** : AES-256-GCM AUTHENTIFIÉ (`chiffrage.py`, bibliothèque `cryptography==44.0.0`),
-  appelé par `base.sh` (chiffrer / dechiffrer = v2 ; dechiffrer_v1 = lecture seule de l'ancien format CBC).
-  Format : « NICHESv2 » + itérations PBKDF2 (600 000) + sel 16 o + nonce 12 o (nouveaux à chaque fichier) + données
-  + étiquette 16 o ; tout l'en-tête est authentifié (données associées GCM). Même secret `NICHES_CLE`.
-  Fichiers de la Release : `vinted.v2.gcm`, `precedente.v2.gcm`, `sauvegarde-AAAA-MM-JJ.v2.gcm` (vers 3 h UTC).
-  Lecture : v2 en priorité ; si la v2 échoue à l'authentification -> ARRÊT (jamais de repli sur la v1) ;
-  v1 seulement s'il n'existe aucune v2 ; Release vide ou illisible -> arrêt (jamais « base vide »).
-  **Les fichiers v1 (`vinted.db.gz.enc`, `precedente.db.gz.enc`, `avant-lot1.db.gz.enc`) ne sont plus jamais écrits
-  ni supprimés. Aucune suppression automatique de sauvegarde. Ne rien supprimer sans accord EXPLICITE de
-  l'utilisateur** (condition posée : au moins 3 relevés v2 réussis + 1 restauration réelle vérifiée).
-- **Sauvegardes (état du 2026-11-08, 15 h UTC, vérifiées par `verifier-sauvegardes.yml` : 6/6 restaurables)** :
-  v2 `vinted.v2.gcm`, `precedente.v2.gcm` (mises à jour à chaque relevé), `avant-lot1.v2.gcm` (copie v2 de
-  avant-lot1, créée par `copie-avant-lot1.yml`, identique octet par octet) ; v1 figées : `vinted.db.gz.enc`,
-  `precedente.db.gz.enc`, `avant-lot1.db.gz.enc`. Workflows manuels : `verifier-sauvegardes.yml` (lecture seule,
-  à relancer quand on veut), `copie-avant-lot1.yml` (usage unique, refuse de réécraser).
+- **Chiffrement : V2 UNIQUEMENT (AES-256-GCM authentifié)** — `chiffrage.py` (`cryptography==44.0.0`), appelé par
+  `base.sh` (`chiffrer`, `dechiffrer`, `verifier`). Format : « NICHESv2 » + itérations PBKDF2 (600 000) + sel 16 o +
+  nonce 12 o (nouveaux à chaque fichier) + données + étiquette 16 o ; en-tête authentifié. Secret `NICHES_CLE`.
+  Le code ne sait PLUS lire l'ancien format V1 (AES-256-CBC) : `dechiffrer_v1` et les branches de secours V1 ont
+  été retirés le 2026-11-08. Sans `vinted.v2.gcm` valide -> les workflows S'ARRÊTENT (aucun repli).
+- **Sauvegardes (Release `donnees`)** : `vinted.v2.gcm` (production), `precedente.v2.gcm` (avant le dernier
+  relevé), `avant-lot1.v2.gcm` (avant le lot 1), `sauvegarde-AAAA-MM-JJ.v2.gcm` (une par jour UTC, créée par le
+  premier relevé du jour OU par le workflow « Sauvegarde du jour » à 00 h 17 / 12 h 17 UTC ; jamais écrasée),
+  `avant-restauration-<horodatage>.v2.gcm` (copie de sécurité faite par chaque restauration).
+  Fichiers V1 encore présents mais plus lus : `vinted.db.gz.enc`, `precedente.db.gz.enc`, `avant-lot1.db.gz.enc`
+  -> **suppression seulement après confirmation EXPLICITE et séparée de l'utilisateur**. Ne jamais supprimer de V2.
+- **Workflows manuels** : `verifier-sauvegardes.yml` (restaure chaque *.v2.gcm, lecture seule),
+  `restaurer.yml` + `restaurer.sh` (source precedente / avant-lot1 / quotidienne+date ; cible `test-temporaire`
+  = Release séparée `restauration-test`, ou `production` avec confirmation RESTAURER ; vérifie GCM + SQLite,
+  refuse si un relevé est en train d'écrire, copie de sécurité avant remplacement, contre-vérification),
+  `sauvegarde-quotidienne.yml` + `sauvegarde_du_jour.sh`.
 - **Lot 1 (2026-11-08)** : sauvegardes chiffrées dans la Release (voir ci-dessus).
   Schéma versionné (`PRAGMA user_version` = 2, `migrer()`), table `observations` (chaque lecture, jamais écrasée),
   stats : intervalles de Wilson (`ic_*`), `confiance` (0-100 = 100 − 2 × largeur de l'intervalle), `n_utilisees`,

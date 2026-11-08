@@ -30,8 +30,9 @@ et calcule quelles **catégories / marques / tranches de prix** se vendent le pl
    Recherche, « Analyser » ouvre une issue GitHub « Recherche : … » ; le workflow répond dans l'issue
    (concurrence, prix, « j'aime », ventes déjà repérées, prix conseillé) et ses annonces récentes sont suivies.
 
-La base de données (SQLite) est gardée dans la Release **`donnees`** (fichier `vinted.db.gz`,
-+ `sauvegarde.db.gz` une fois par jour). **Ne pas supprimer cette Release.**
+La base de données (SQLite) est gardée **chiffrée (AES-256-GCM)** dans la Release **`donnees`**
+(`vinted.v2.gcm` + sauvegardes `precedente`, `avant-lot1` et une par jour). Clé : secret GitHub `NICHES_CLE`.
+**Ne pas supprimer cette Release.** Restaurer une sauvegarde : workflow « Restaurer une sauvegarde ».
 
 ## Mise en route (une seule fois)
 

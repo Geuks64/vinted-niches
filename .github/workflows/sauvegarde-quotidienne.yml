@@ -1,0 +1,27 @@
+# Sauvegarde du jour, indépendante des relevés : copie la base de production (après vérification AES-256-GCM
+# et SQLite) en sauvegarde-AAAA-MM-JJ.v2.gcm si elle n'existe pas encore. Ne touche pas à la collecte.
+name: Sauvegarde du jour
+on:
+  schedule:
+    - cron: "17 0 * * *"
+    - cron: "17 12 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: sauvegarde-du-jour
+  cancel-in-progress: false
+jobs:
+  sauvegarde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NICHES_CLE: ${{ secrets.NICHES_CLE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -q cryptography==44.0.0
+      - name: Sauvegarde du jour
+        run: bash sauvegarde_du_jour.sh

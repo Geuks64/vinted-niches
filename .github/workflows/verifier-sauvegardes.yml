@@ -1,5 +1,7 @@
-# Lecture seule : restaure CHAQUE sauvegarde de la Release « donnees » (v2 : authentification GCM ; v1 : ancien
-# format) et affiche intégrité SQLite + empreintes SHA-256. Ne modifie ni ne supprime rien.
+# Lecture seule : restaure CHAQUE sauvegarde v2 (*.v2.gcm, AES-256-GCM) de la Release « donnees » et affiche
+# authenticité, intégrité SQLite, nombre d'annonces / observations et empreintes SHA-256.
+# Les fichiers d'un autre format sont seulement listés (jamais ouverts). Ne modifie ni ne supprime rien.
+# La base déchiffrée n'est jamais publiée (ni artefact, ni journal) : seuls des compteurs et empreintes sont affichés.
 name: Vérifier les sauvegardes
 on:
   workflow_dispatch:
@@ -23,26 +25,22 @@ jobs:
           mkdir verif && cd verif
           echo "== Contenu de la Release"
           gh release view donnees --json assets --jq '.assets[] | "\(.name)  \(.size) octets  maj \(.updatedAt)"'
-          ok=0; ko=0
+          ok=0; ko=0; autres=0
           for f in $(gh release view donnees --json assets --jq '.assets[].name'); do
             case "$f" in
-              *.v2.gcm)    cmd=dechiffrer ;;
-              *.db.gz.enc) cmd=dechiffrer_v1 ;;
-              *) echo "?? $f : format inconnu, ignoré"; continue ;;
+              *.v2.gcm) ;;
+              *) echo "--  $f : pas au format v2 -> non vérifié (ignoré)"; autres=$((autres+1)); continue ;;
             esac
-            if gh release download donnees -p "$f" && bash ../base.sh "$cmd" "$f" "$f.db" > journal.txt 2>&1; then
-              echo "OK  $f  [$cmd]"
+            if gh release download donnees -p "$f" && bash ../base.sh dechiffrer "$f" "$f.db" > journal.txt 2>&1; then
+              echo "OK  $f  (authentique, intégrité SQLite ok)"
               echo "    fichier : $(sha256sum "$f" | cut -d' ' -f1)"
               echo "    base    : $(sha256sum "$f.db" | cut -d' ' -f1)"
               echo "    $(tail -1 journal.txt)"
               ok=$((ok+1))
             else
-              echo "ÉCHEC  $f  [$cmd] : $(tail -2 journal.txt | tr '\n' ' ')"
+              echo "ÉCHEC  $f : $(tail -2 journal.txt | tr '\n' ' ')"
               ko=$((ko+1))
             fi
           done
-          if [ -f avant-lot1.db.gz.enc.db ] && [ -f avant-lot1.v2.gcm.db ]; then
-            cmp avant-lot1.db.gz.enc.db avant-lot1.v2.gcm.db && echo "avant-lot1 : bases v1 et v2 identiques (octet par octet)."
-          fi
-          echo "== Restaurables : $ok, en échec : $ko"
-          [ "$ko" -eq 0 ]
+          echo "== Sauvegardes v2 restaurables : $ok, en échec : $ko, autres fichiers non vérifiés : $autres"
+          [ "$ko" -eq 0 ] && [ "$ok" -gt 0 ]
