@@ -96,6 +96,8 @@ def ouvrir_base():
         controles INTEGER, ventes INTEGER, blocages INTEGER, note TEXT
     );
     """)
+    if "badge" not in [c[1] for c in con.execute("PRAGMA table_info(annonces)")]:
+        con.execute("ALTER TABLE annonces ADD COLUMN badge TEXT")
     colonnes = [c[1] for c in con.execute("PRAGMA table_info(rattrapage)")]
     if "devise" not in colonnes:
         # avant le 2026-11-08 midi la devise n'était pas lue : prix inutilisables (forints, zlotys...)
@@ -141,6 +143,18 @@ def montant(p):
         return None
 
 
+def texte_badge(b):
+    """Badge affiché sur l'annonce (ex. « En demande ») -> texte, sinon None."""
+    if isinstance(b, str):
+        return None if b.startswith("$") else b
+    if isinstance(b, dict):
+        for k in ("title", "text", "label", "body", "content", "type"):
+            if isinstance(b.get(k), str):
+                return b[k]
+        return json.dumps(b, ensure_ascii=False)[:80]
+    return None
+
+
 def lire_cartes(html):
     """Annonces d'une page de catalogue -> liste de dict."""
     vues, res = set(), []
@@ -164,6 +178,7 @@ def lire_cartes(html):
             "prix_total": montant(c.get("totalItemPrice")),
             "devise": (c.get("price") or {}).get("currencyCode"),
             "favoris0": c.get("favouriteCount") or 0,
+            "badge": texte_badge(box.get("badge")),
             "pro": 1 if (c.get("user") or {}).get("isBusiness") else 0,
             "miniature": c.get("thumbnailUrl"),
             "url": c.get("url"),
@@ -180,6 +195,15 @@ def lire_annonce(html):
         m = re.search(r'"' + cle + r'":\s*("[^"]*"|true|false|null|-?\d+(?:\.\d+)?)', f)
         if m:
             brut[cle] = json.loads(m.group(1))
+    for m in re.finditer(r'"([a-z_]*(?:country|city)[a-z_]*)":\s*("[^"]{1,40}"|\d+)', f):
+        if m.group(1) not in brut and len(brut) < 25:
+            brut[m.group(1)] = json.loads(m.group(2))
+    m = re.search(r'"badge":\s*(\{[^{}]{0,200}\})', f)
+    if m:
+        try:
+            brut["badge"] = texte_badge(json.loads(m.group(1)))
+        except ValueError:
+            pass
     for m in re.finditer(r'"([a-z_]*(?:sold|closed|closing|transaction)[a-z_]*)":\s*(true|false|"[^"]{0,40}"|\d+)', f):
         if m.group(1) not in brut and len(brut) < 25:
             brut[m.group(1)] = json.loads(m.group(2))
@@ -337,14 +361,15 @@ def nouvelles_annonces(v, con):
             suivi = 1 if random.random() < TAUX_SUIVI else 0
             cur = con.execute(
                 """INSERT OR IGNORE INTO annonces (id, vu_le, titre, marque, taille, etat, prix, prix_total,
-                   devise, favoris0, pro, miniature, url, suivi, prochain_controle)
+                   devise, favoris0, pro, miniature, url, suivi, prochain_controle, badge)
                    VALUES (:id, :vu_le, :titre, :marque, :taille, :etat, :prix, :prix_total, :devise,
-                   :favoris0, :pro, :miniature, :url, :suivi, :prochain)""",
+                   :favoris0, :pro, :miniature, :url, :suivi, :prochain, :badge)""",
                 {**c, "vu_le": maintenant, "suivi": suivi,
                  "prochain": maintenant + CONTROLES_H[0] * 3600 if suivi else None})
             nouvelles += cur.rowcount
         con.commit()
-        log(f"Catalogue page {page} : {len(cartes)} annonces")
+        badges = [c["badge"] for c in cartes if c["badge"]]
+        log(f"Catalogue page {page} : {len(cartes)} annonces" + (f" | badges : {badges[:5]}" if badges else ""))
     return vues, nouvelles
 
 
