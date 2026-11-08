@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write
   pages: write
   id-token: write
 concurrency:
@@ -16,13 +17,15 @@ concurrency:
 jobs:
   releve:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deploiement.outputs.page_url }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Heure de début
+        run: echo "DEBUT_JOB=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
@@ -73,6 +76,28 @@ jobs:
         with: { path: site }
       - id: deploiement
         uses: actions/deploy-pages@v4
+
+      - name: Relance de secours (si la planification GitHub ne se déclenche pas)
+        if: always()
+        run: |
+          # Relevé planifié (cron) dans les 45 dernières minutes ? Alors GitHub s'en occupe, rien à faire.
+          derniere=$(gh run list --workflow releve.yml --event schedule --limit 1 --json createdAt --jq '.[0].createdAt // empty')
+          if [ -n "$derniere" ] && [ $(( $(date +%s) - $(date -d "$derniere" +%s) )) -lt 2700 ]; then
+            echo "La planification GitHub fonctionne : pas de relance."
+            exit 0
+          fi
+          # Un relevé est déjà en attente ? On ne double pas.
+          attente=$(gh run list --workflow releve.yml --limit 20 --json status \
+            --jq '[.[] | select(.status=="queued" or .status=="pending" or .status=="waiting" or .status=="requested")] | length')
+          if [ "$attente" != "0" ]; then
+            echo "Un relevé est déjà en attente : pas de relance."
+            exit 0
+          fi
+          # On attend que 20 min se soient écoulées depuis le début de ce relevé, puis on relance.
+          reste=$(( 1200 - ($(date +%s) - DEBUT_JOB) ))
+          if [ "$reste" -gt 0 ]; then echo "Pause de $reste s avant la relance"; sleep "$reste"; fi
+          gh workflow run releve.yml --ref main
+          echo "Relevé suivant lancé."
 
       - name: Résultat du relevé
         if: steps.collecte.outcome == 'failure'

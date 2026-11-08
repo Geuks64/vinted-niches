@@ -39,6 +39,13 @@
   ~1 j / 3 j / 7 j (numéro tiré au hasard ; âge estimé via la table `reperes` = numéro max vu à chaque relevé,
   débit mesuré, ~75-80 numéros/s). Résultats dans la table `rattrapage`, fusionnés dans les stats par tranche d'âge
   (`TRANCHES_AGE` dans stats.py). Les numéros absents (404 : brouillons, supprimées) sont écartés.
+- **Devises** : le rattrapage tombe sur des annonces de tous les pays (HUF, PLN, CZK...). La devise est lue
+  (`priceCurrency` JSON-LD ou `currency_code` du bloc prix de l'annonce) et le prix converti en € (`TAUX_EUR`,
+  taux approximatifs). Les ~360 lignes de rattrapage d'avant ce correctif ont leur prix effacé.
+- **Planification** : le cron GitHub (`7,27,47 * * * *`) ne s'était toujours pas déclenché 1 h après la création
+  du dépôt. Étape « Relance de secours » : si aucun relevé planifié dans les 45 dernières min et aucun relevé en
+  attente, le workflow attend que 20 min soient écoulées depuis son début puis relance `releve.yml`
+  (s'arrête tout seul dès que le cron marche).
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

@@ -96,6 +96,12 @@ def ouvrir_base():
         controles INTEGER, ventes INTEGER, blocages INTEGER, note TEXT
     );
     """)
+    colonnes = [c[1] for c in con.execute("PRAGMA table_info(rattrapage)")]
+    if "devise" not in colonnes:
+        # avant le 2026-11-08 midi la devise n'était pas lue : prix inutilisables (forints, zlotys...)
+        con.execute("ALTER TABLE rattrapage ADD COLUMN devise TEXT")
+        con.execute("UPDATE rattrapage SET prix = NULL")
+        con.commit()
     return con
 
 
@@ -184,16 +190,20 @@ def lire_annonce(html):
             chemin = [x.get("title") for x in b if x.get("url", "").startswith("/catalog/")
                       and "/brand/" not in x.get("url", "")]
             break
-    prix = None
+    prix, devise = None, None
     m = re.search(r'"offers":\{[^{}]*?"price":\s*([\d.]+)', f)
     if m:
         prix = float(m.group(1))
+        m2 = re.search(r'"offers":\{[^{}]*?"priceCurrency":\s*"(\w+)"', f)
+        devise = m2.group(1) if m2 else None
     d = details_annonce(f)
     if prix is None:
-        # bloc « faire une offre » : "price":{"amount":"26","currency_code":"EUR"}
-        m = re.search(r'"price":\{"amount":"([\d.]+)"', f)
+        # bloc « faire une offre » de CETTE annonce : "price":{"amount":"26","currency_code":"EUR"},"seller_id":..,"title":..
+        m = re.search(r'"price":\{"amount":"([\d.]+)","currency_code":"(\w+)"\},"seller_id":"\d+","title":', f)
         if m:
-            prix = float(m.group(1))
+            prix, devise = float(m.group(1)), m.group(2)
+    d["devise"] = devise
+    d["prix_eur"] = en_euros(prix, devise)
     if not d["titre"]:
         m = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]*)"', html) or \
             re.search(r'<title>([^<]*)</title>', html)
@@ -204,6 +214,17 @@ def lire_annonce(html):
         if m:
             d["miniature"] = unescape(m.group(1))
     return brut, " > ".join(t for t in chemin if t), prix, d
+
+
+# Taux approximatifs (1 unité = x €) : le rattrapage tombe sur des annonces de tous les pays Vinted.
+TAUX_EUR = {"EUR": 1.0, "PLN": 0.235, "CZK": 0.04, "HUF": 0.0025, "RON": 0.2, "SEK": 0.088, "DKK": 0.134,
+            "GBP": 1.17, "USD": 0.92, "CHF": 1.05, "NOK": 0.085, "BGN": 0.51, "HRK": 0.133}
+
+
+def en_euros(prix, devise):
+    if prix is None or devise not in TAUX_EUR:
+        return None
+    return round(prix * TAUX_EUR[devise], 2)
 
 
 def produit_jsonld(f):
@@ -358,7 +379,8 @@ def controles(v, con):
                 con.execute("""UPDATE annonces SET statut='supprime', n_controles=?, prochain_controle=NULL,
                                dernier_controle=? WHERE id=?""", (n2, maintenant, iid))
             elif r.status_code == 200:
-                brut, categorie, prix, _ = lire_annonce(r.text)
+                brut, categorie, _, d = lire_annonce(r.text)
+                prix = d["prix_eur"]
                 # page sans aucun indicateur lisible -> « inconnu » (exclu des stats)
                 statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
                 cat_id = brut.get("catalog_id")
@@ -449,18 +471,19 @@ def rattrapage(v, con):
         statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
         cat_id = brut.get("catalog_id")
         con.execute("""INSERT OR IGNORE INTO rattrapage (id, verifie_le, age_vise_h, age_h, statut, titre, marque,
-            taille, etat, prix, categorie_id, categorie, favoris, miniature, url, brut)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (iid, maintenant, age_vise, age_h, statut, d["titre"], d["marque"], d["taille"], d["etat"], prix,
+            taille, etat, prix, categorie_id, categorie, favoris, miniature, url, brut, devise)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (iid, maintenant, age_vise, age_h, statut, d["titre"], d["marque"], d["taille"], d["etat"], d["prix_eur"],
              int(cat_id) if str(cat_id or "").isdigit() else None, categorie or None,
-             brut.get("favourite_count"), d["miniature"], f"/items/{iid}", json.dumps(brut, ensure_ascii=False)))
+             brut.get("favourite_count"), d["miniature"], f"/items/{iid}", json.dumps(brut, ensure_ascii=False),
+             d["devise"]))
         faits += 1
         ventes += statut == "vendu"
         # Journal détaillé des premières pages lues (pour vérifier la détection des ventes)
         if montres < 6 or (statut != "en_vente" and montres < 15):
             montres += 1
             log(f"  [{iid} ~{age_h:.0f} h] {statut} | {d['titre']} | {d['marque']} | {d['taille']} | {d['etat']} | "
-                f"{prix} € | {categorie} | {brut}")
+                f"{prix} {d['devise']} | {categorie} | {brut}")
         if faits % 10 == 0:
             con.commit()
     con.commit()
