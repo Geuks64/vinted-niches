@@ -1,0 +1,47 @@
+# Republie le tableau de bord (GitHub Pages) sans attendre la fin d'un relevé (~2 min) :
+#   - quand l'appli ou le calcul des stats changent (push sur main),
+#   - à la fin de chaque recherche « Est-ce que ça se vend ? »,
+#   - à la main (bouton « Run workflow »).
+# LECTURE SEULE : la base est déchiffrée (AES-256-GCM vérifié) pour recalculer stats.json, jamais modifiée ni
+# republiée. La base déchiffrée n'est jamais mise dans la page : seul stats.json (statistiques) est publié.
+name: Publier la page
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "stats.py", ".github/workflows/publier-page.yml"]
+  workflow_run:
+    workflows: ["Recherche Vinted"]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: publier-page
+  cancel-in-progress: true
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NICHES_CLE: ${{ secrets.NICHES_CLE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -q cryptography==44.0.0
+      - name: Base (lecture seule) et statistiques
+        run: |
+          bash base.sh cle_presente
+          gh release download donnees -p vinted.v2.gcm --clobber
+          bash base.sh dechiffrer vinted.v2.gcm vinted.db
+          python stats.py
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - id: deploiement
+        uses: actions/deploy-pages@v4

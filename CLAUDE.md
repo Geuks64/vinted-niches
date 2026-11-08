@@ -76,6 +76,9 @@
   = Release séparée `restauration-test`, ou `production` avec confirmation RESTAURER ; vérifie GCM + SQLite,
   refuse si un relevé est en train d'écrire, copie de sécurité avant remplacement, contre-vérification),
   `sauvegarde-quotidienne.yml` + `sauvegarde_du_jour.sh`.
+- **Publication de la page** : `publier-page.yml` republie GitHub Pages en ~2 min (push sur site/ ou stats.py,
+  fin d'une recherche, ou à la main), en LECTURE SEULE sur la base. Les relevés continuent aussi de publier.
+  L'onglet Recherche lit en plus les résultats directement dans `recherches/` du dépôt (API GitHub publique).
 - **Tests de production du 2026-11-08 (16 h-17 h UTC)** : relevé n°19 (V2 seule) OK + création de
   `sauvegarde-2026-11-08.v2.gcm` ; « Vérifier les sauvegardes » : 4 V2 restaurables, 3 V1 ignorées ; restaurations
   en `test-temporaire` OK pour precedente, avant-lot1 et quotidienne 2026-11-08 ; production sans RESTAURER refusée.
