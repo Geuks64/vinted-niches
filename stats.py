@@ -83,7 +83,7 @@ def main():
     ratt = [dict(r) for r in con.execute("SELECT * FROM rattrapage WHERE statut != 'supprime'")]
 
     # ---------- segments
-    noms = ("categorie", "marque", "categorie_marque", "categorie_prix")
+    noms = ("categorie_large", "categorie", "marque", "categorie_marque", "categorie_prix")
     groupes = {n: defaultdict(list) for n in noms}
     groupes_r = {n: defaultdict(list) for n in noms}
     for liste, cible in ((suivies, groupes), (ratt, groupes_r)):
@@ -92,6 +92,8 @@ def main():
             cible["marque"][marque].append(a)
             if cat:
                 cible["categorie"][cat].append(a)
+                # catégorie large = 3 premiers niveaux (ex. « Femmes > Vêtements > Robes »)
+                cible["categorie_large"][" > ".join(cat.split(" > ")[:3])].append(a)
                 cible["categorie_marque"][f"{cat} · {marque}"].append(a)
                 if tr:
                     cible["categorie_prix"][f"{cat} · {tr}"].append(a)
