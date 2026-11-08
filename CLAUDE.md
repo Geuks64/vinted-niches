@@ -98,6 +98,13 @@
   ventes ; prix de vente = médiane des ventes, achat max = V × (1 − 0,123 − 0,40) − 0,5, gain ≈ 0,40 × V ; classement
   = borne basse de Wilson × gain ; 10 types max, 12 vraies annonces vendues en exemple. Les prix chinois ne sont PAS
   lus automatiquement (bouton « Trouver en Chine »).
+- **Test catalogue filtré (2026-11-08, `diag_catalogue.py` / `diag-catalogue.yml`, manuel, lecture seule)** : filtre
+  « Neuf » = `status_ids[]=6&status_ids[]=1` (100 % neuves). Listes plafonnées à 960 annonces et NON classées par date
+  (annonces de 10 min et de 3 semaines mélangées) -> suivre les ventes par « disparition de la liste » n'est PAS fiable.
+  Utilisation retenue : relevé = 3 pages « tout » + 3 pages « Neuf » (`PAGES`, `PAGES_NEUF`), en ne gardant des pages
+  Neuf que les annonces de moins de `FRAIS_H` (1 h, âge d'après le numéro ; vu_le = heure estimée de publication).
+  Livres / CD / films (« Livres et médias ») : jamais « de marque » sur Vinted -> exclus des cibles (`cible.py`) et
+  leur suivi s'arrête au 1er contrôle (`arreter_si_hors_cible`).
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

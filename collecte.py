@@ -24,7 +24,7 @@ import time
 
 from curl_cffi import requests as cr
 
-from cible import est_cible
+from cible import CATEGORIES_EXCLUES, est_cible, sans_marque
 
 BASE = "https://www.vinted.fr"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -33,7 +33,14 @@ ENTETES = {"User-Agent": UA, "Accept-Language": "fr-FR,fr;q=0.9"}
 
 # Réglages (modifiables par variables d'environnement dans le workflow)
 DB = os.environ.get("NICHES_DB", "vinted.db")
-PAGES = int(os.environ.get("NICHES_PAGES", "6"))            # pages de catalogue par relevé (96 annonces/page)
+PAGES = int(os.environ.get("NICHES_PAGES", "3"))            # pages de catalogue « tout » par relevé (96 annonces/page)
+# + pages filtrées « Neuf » (avec ou sans étiquette) : beaucoup plus d'annonces neuves sans marque par requête.
+# Total inchangé (6 pages). Test du 2026-11-08 : le filtre marche, mais ces listes ne sont PAS classées par date
+# (annonces remontées mélangées) -> on ne garde que les annonces publiées depuis moins de FRAIS_H (âge d'après
+# le numéro de l'annonce).
+PAGES_NEUF = int(os.environ.get("NICHES_PAGES_NEUF", "3"))
+FILTRE_NEUF = "status_ids[]=6&status_ids[]=1"
+FRAIS_H = 1.0
 TAUX_SUIVI = float(os.environ.get("NICHES_TAUX", "0.07"))    # part des nouvelles annonces suivies
 # Écran « Opportunités » : les annonces NEUVES et SANS MARQUE (revendables depuis la Chine) reçoivent
 # PART_CIBLE du budget de suivi. Le nombre total d'annonces suivies (donc de requêtes) ne change pas.
@@ -432,11 +439,11 @@ def temps_restant():
     return DUREE_MAX - (time.time() - DEBUT)
 
 
-def probas_suivi(cartes):
-    """(probabilité pour les cibles, pour les autres) : même budget total TAUX_SUIVI × nombre de cartes."""
+def probas_suivi(cartes, budget=None):
+    """(probabilité pour les cibles, pour les autres) : budget = TAUX_SUIVI × nombre de cartes de la page."""
     n_cible = sum(1 for c in cartes if est_cible(c))
     n_autre = len(cartes) - n_cible
-    budget = TAUX_SUIVI * len(cartes)
+    budget = TAUX_SUIVI * len(cartes) if budget is None else budget
     pour_cibles = min(PART_CIBLE * budget, n_cible)
     p_cible = pour_cibles / n_cible if n_cible else 0
     p_autre = (budget - pour_cibles) / n_autre if n_autre else 0
@@ -446,32 +453,55 @@ def probas_suivi(cartes):
 def nouvelles_annonces(v, con):
     maintenant = int(time.time())
     vues = nouvelles = 0
-    for page in range(1, PAGES + 1):
+    listes = [("tout", page, f"/catalog?order=newest_first&page={page}") for page in range(1, PAGES + 1)]
+    listes += [("neuf", page, f"/catalog?order=newest_first&{FILTRE_NEUF}&page={page}")
+               for page in range(1, PAGES_NEUF + 1)]
+    for liste, page, chemin in listes:
         if v.bloque() or temps_restant() < 60:
             break
-        r = v.get(f"/catalog?order=newest_first&page={page}")
+        r = v.get(chemin)
         if r is None or r.status_code != 200:
             continue
         cartes = lire_cartes(r.text)
         vues += len(cartes)
-        if page == 1 and cartes:
+        budget = TAUX_SUIVI * len(cartes)
+        if liste == "tout" and page == 1 and cartes:
             # repère numéro <-> heure (sert à estimer l'âge des annonces pour le rattrapage)
             con.execute("INSERT OR REPLACE INTO reperes VALUES (?, ?)", (maintenant, max(c["id"] for c in cartes)))
-        p_cible, p_autre = probas_suivi(cartes)
+        ages = {}
+        if liste == "neuf":
+            # liste non chronologique : seulement les annonces toutes fraîches, avec leur vraie heure de publication
+            ages = {c["id"]: id_vers_age(con, c["id"], maintenant) for c in cartes}
+            cartes = [c for c in cartes if ages[c["id"]] <= FRAIS_H]
+        p_cible, p_autre = probas_suivi(cartes, budget)
         for c in cartes:
             suivi = 1 if random.random() < (p_cible if est_cible(c) else p_autre) else 0
+            vu_le = maintenant - int(max(0, ages.get(c["id"], 0)) * 3600)
             cur = con.execute(
                 """INSERT OR IGNORE INTO annonces (id, vu_le, titre, marque, taille, etat, prix, prix_total,
                    devise, favoris0, pro, miniature, url, suivi, prochain_controle, badge)
                    VALUES (:id, :vu_le, :titre, :marque, :taille, :etat, :prix, :prix_total, :devise,
                    :favoris0, :pro, :miniature, :url, :suivi, :prochain, :badge)""",
-                {**c, "vu_le": maintenant, "suivi": suivi,
-                 "prochain": maintenant + CONTROLES_H[0] * 3600 if suivi else None})
+                {**c, "vu_le": vu_le, "suivi": suivi,
+                 "prochain": vu_le + CONTROLES_H[0] * 3600 if suivi else None})
             nouvelles += cur.rowcount
         con.commit()
         badges = [c["badge"] for c in cartes if c["badge"]]
-        log(f"Catalogue page {page} : {len(cartes)} annonces, dont {sum(map(est_cible, cartes))} neuves sans marque" + (f" | badges : {badges[:5]}" if badges else ""))
+        log(f"Catalogue {liste} page {page} : {len(cartes)} annonces"
+            + (f" de moins de {FRAIS_H:g} h" if liste == "neuf" else "")
+            + f", dont {sum(map(est_cible, cartes))} neuves sans marque"
+            + (f" | badges : {badges[:5]}" if badges else ""))
     return vues, nouvelles
+
+
+def arreter_si_hors_cible(con, iid, categorie):
+    """Livre / CD / film neuf « sans marque » (suivi en priorité par erreur, la catégorie n'est connue qu'à la
+    page de l'annonce) : on arrête son suivi pour garder les contrôles pour les vraies cibles."""
+    if not str(categorie or "").startswith(CATEGORIES_EXCLUES):
+        return
+    titre, marque, etat = con.execute("SELECT titre, marque, etat FROM annonces WHERE id = ?", (iid,)).fetchone()
+    if str(etat or "").startswith("Neuf") and sans_marque(marque, titre):
+        con.execute("UPDATE annonces SET suivi = 0, prochain_controle = NULL WHERE id = ?", (iid,))
 
 
 def controles(v, con):
@@ -556,6 +586,7 @@ def controles(v, con):
                 con.execute(f"""UPDATE annonces SET statut=:statut, n_controles=:n, prochain_controle=:prochain,
                     prix_final=:prix, {maj_commune} WHERE id=:id""",
                     {**commun, "statut": statut, "n": n2, "prix": prix, "prochain": prochain})
+                arreter_si_hors_cible(con, iid, categorie)
             faits += 1
         con.commit()
     log(f"Contrôles : {faits} annonces revues, {ventes} ventes (probables ou confirmées) détectées")
