@@ -75,15 +75,59 @@ def segment_stats(lignes, maintenant, ratt=()):
     return res
 
 
-def main():
-    con = sqlite3.connect(DB)
-    con.row_factory = sqlite3.Row
-    maintenant = int(time.time())
-    suivies = [dict(r) for r in con.execute("SELECT * FROM annonces WHERE suivi = 1")]
-    ratt = [dict(r) for r in con.execute("SELECT * FROM rattrapage WHERE statut != 'supprime'")]
+def pays_de(a):
+    """Pays du vendeur (code à 2 lettres) lu dans les indicateurs bruts de la page, sinon None."""
+    if not a.get("brut"):
+        return None
+    b = json.loads(a["brut"])
+    for k, v in b.items():
+        if "country" in k and isinstance(v, str):
+            if len(v) == 2 and v.isalpha():
+                return v.upper()
+            if v.lower() == "france":
+                return "FR"
+    return None
 
+
+def age_heures(a, maintenant):
+    """Âge de l'annonce au moment où ses favoris ont été lus."""
+    if a.get("age_h") is not None:                       # rattrapage
+        return a["age_h"]
+    if a.get("dernier_controle") and a.get("vu_le"):     # suivi
+        return (a["dernier_controle"] - a["vu_le"]) / 3600
+    return None
+
+
+def favoris_jour(a, maintenant):
+    """Favoris gagnés par jour en ligne (signal d'intérêt des acheteurs)."""
+    h = age_heures(a, maintenant)
+    if a.get("favoris") is None or h is None:
+        return None
+    return a["favoris"] / max(h / 24, 0.25)
+
+
+def en_demande(a):
+    """L'annonce porte-t-elle un badge de demande (« En demande », « Populaire »...) ?"""
+    badge = a.get("badge")
+    if not badge and a.get("brut"):
+        badge = json.loads(a["brut"]).get("badge")
+    return bool(badge)
+
+
+def carte(a, maintenant):
+    c = {k: a.get(k) for k in ("id", "titre", "marque", "taille", "etat", "prix", "prix_final", "statut",
+                               "categorie", "favoris", "miniature", "url", "vu_le", "vendu_apres_h",
+                               "vendu_avant_h", "vendu_detecte", "pro", "rattrapage")}
+    fj = favoris_jour(a, maintenant)
+    c["favoris_jour"] = round(fj, 1) if fj is not None else None
+    c["badge"] = en_demande(a)
+    return c
+
+
+def calculer_vue(suivies, ratt, maintenant, offre):
+    """Toutes les stats d'une « vue » (toute l'Europe, ou France seulement)."""
     # ---------- segments
-    noms = ("categorie_large", "categorie", "marque", "categorie_marque", "categorie_prix")
+    noms = ("categorie_large", "categorie", "marque", "categorie_marque", "categorie_prix", "produit")
     groupes = {n: defaultdict(list) for n in noms}
     groupes_r = {n: defaultdict(list) for n in noms}
     for liste, cible in ((suivies, groupes), (ratt, groupes_r)):
@@ -91,10 +135,12 @@ def main():
             cat, marque, tr = a["categorie"], a["marque"] or "(sans marque)", tranche(a["prix"])
             cible["marque"][marque].append(a)
             if cat:
+                large = " > ".join(cat.split(" > ")[:3])   # ex. « Femmes > Vêtements > Robes »
                 cible["categorie"][cat].append(a)
-                # catégorie large = 3 premiers niveaux (ex. « Femmes > Vêtements > Robes »)
-                cible["categorie_large"][" > ".join(cat.split(" > ")[:3])].append(a)
+                cible["categorie_large"][large].append(a)
                 cible["categorie_marque"][f"{cat} · {marque}"].append(a)
+                # « produit » = catégorie large + marque (ex. « Femmes > Vêtements > Sweats · Nike »)
+                cible["produit"][f"{large} · {marque}"].append(a)
                 if tr:
                     cible["categorie_prix"][f"{cat} · {tr}"].append(a)
     segments = {}
@@ -104,27 +150,64 @@ def main():
         for cle in set(g) | set(gr):
             s = segment_stats(g.get(cle, []), maintenant, gr.get(cle, []))
             if s["n"] >= N_MIN:
+                tous = g.get(cle, []) + gr.get(cle, [])
+                fj = [x for x in (favoris_jour(a, maintenant) for a in tous) if x is not None]
+                s["favoris_jour"] = round(sum(fj) / len(fj), 2) if fj else None
+                s["part_demande"] = round(100 * sum(en_demande(a) for a in tous) / len(tous), 1)
                 lignes.append({"nom": cle, **s})
         lignes.sort(key=lambda x: (x["score"] is None, -(x["score"] or 0), -x["n"]))
         segments[nom] = lignes[:400]
-
-    # ---------- offre : nouvelles annonces par jour et par marque (7 derniers jours)
-    offre = defaultdict(int)
-    for marque, n in con.execute("""SELECT COALESCE(marque, '(sans marque)'), COUNT(*) FROM annonces
-                                    WHERE vu_le > ? GROUP BY 1""", (maintenant - 7 * 86400,)):
-        offre[marque] += n
-    for marque, n in con.execute("""SELECT marque, SUM(n) FROM offre_jour
-                                    WHERE jour >= date(?, 'unixepoch') GROUP BY 1""", (maintenant - 7 * 86400,)):
-        offre[marque] += n
     for ligne in segments["marque"]:
         ligne["offre_7j"] = offre.get(ligne["nom"], 0)
 
-    def carte(a):
-        return {k: a.get(k) for k in ("id", "titre", "marque", "taille", "etat", "prix", "prix_final",
-                                      "categorie", "favoris", "miniature", "url", "vu_le",
-                                      "vendu_apres_h", "vendu_avant_h", "vendu_detecte", "pro", "rattrapage")}
+    # ---------- références globales (pour comparer chaque produit à la moyenne de Vinted)
+    glob = segment_stats(suivies, maintenant, ratt)
+    tous = suivies + ratt
+    fj_tous = [x for x in (favoris_jour(a, maintenant) for a in tous) if x is not None]
+    fav_moy = sum(fj_tous) / len(fj_tous) if fj_tous else 0
+    ref = {"taux_24h": glob["taux_24h"], "taux_3j": glob["taux_3j"], "taux_7j": glob["taux_7j"],
+           "favoris_jour": round(fav_moy, 2), "n": glob["n"]}
 
-    # ---------- flux : dernières ventes détectées, annonces qui plaisent
+    # ---------- Top du moment : produits classés par un indice de demande (0-100)
+    top = []
+    for nom_seg in ("produit", "categorie_large", "marque"):
+        for l in segments[nom_seg]:
+            # taux de vente ramené à 7 jours (la fenêtre 7 j n'est pas toujours disponible)
+            t7 = None
+            for f in ("7j", "3j", "24h"):
+                if l["taux_" + f] is not None and ref["taux_" + f]:
+                    t7 = l["taux_" + f] * (ref["taux_7j"] or ref["taux_" + f]) / ref["taux_" + f]
+                    break
+            if t7 is None:
+                continue
+            k = 15   # prudence : un petit échantillon est ramené vers la moyenne
+            t7_p = (t7 * l["n"] + (ref["taux_7j"] or t7) * k) / (l["n"] + k)
+            fav = l["favoris_jour"] if l["favoris_jour"] is not None else fav_moy
+            fav_p = (fav * l["n"] + fav_moy * k) / (l["n"] + k)
+            r_vente = t7_p / ref["taux_7j"] if ref["taux_7j"] else 1
+            r_fav = fav_p / fav_moy if fav_moy else 1
+            indice = round(min(100, 50 * (0.65 * r_vente + 0.35 * r_fav)), 1)
+            if r_vente >= 1.4 or (r_vente >= 1.1 and r_fav >= 1.5):
+                verdict = "tres_demande"
+            elif r_vente >= 1.0:
+                verdict = "bien"
+            elif r_vente <= 0.6 and r_fav <= 1:
+                verdict = "eviter"
+            else:
+                verdict = "moyen"
+            top.append({"nom": l["nom"], "type": nom_seg, "indice": indice, "verdict": verdict,
+                        "taux_7j_estime": round(t7, 1), "favoris_jour": l["favoris_jour"],
+                        "part_demande": l["part_demande"], "prix_vendu": l["prix_vendu"], "prix": l["prix"],
+                        "delai_h": l["delai_h"], "n": l["n"], "vendues": l["vendues"],
+                        "offre_7j": l.get("offre_7j")})
+    top.sort(key=lambda x: -x["indice"])
+
+    # ---------- annonces les plus aimées (7 derniers jours de relevé), vendues ou non
+    recentes = [a for a in tous if favoris_jour(a, maintenant) is not None
+                and (a.get("verifie_le") or a.get("dernier_controle") or 0) > maintenant - 7 * 86400]
+    aimees = sorted(recentes, key=lambda a: -favoris_jour(a, maintenant))[:60]
+
+    # ---------- flux des ventes
     ventes = [a for a in suivies if a["statut"] == "vendu"]
     for a in ratt:
         if a["statut"] == "vendu":
@@ -135,6 +218,50 @@ def main():
     chaudes = sorted((a for a in suivies if a["vu_le"] > maintenant - 48 * 3600 and a["favoris"]
                       and a["statut"] in ("en_vente", "reserve")),
                      key=lambda a: -(a["favoris"] / max(1, (a["dernier_controle"] - a["vu_le"]) / 3600)))
+    return {"segments": segments, "reference": ref, "top": top[:150],
+            "aimees": [carte(a, maintenant) for a in aimees],
+            "ventes": [carte(a, maintenant) for a in ventes[:60]],
+            "chaudes": [carte(a, maintenant) for a in chaudes[:40]],
+            "n_annonces": len(tous)}
+
+
+def main():
+    con = sqlite3.connect(DB)
+    con.row_factory = sqlite3.Row
+    maintenant = int(time.time())
+    suivies = [dict(r) for r in con.execute("SELECT * FROM annonces WHERE suivi = 1")]
+    ratt = [dict(r) for r in con.execute("SELECT * FROM rattrapage WHERE statut != 'supprime'")]
+
+    # ---------- offre : nouvelles annonces par jour et par marque (7 derniers jours)
+    offre = defaultdict(int)
+    for marque, n in con.execute("""SELECT COALESCE(marque, '(sans marque)'), COUNT(*) FROM annonces
+                                    WHERE vu_le > ? GROUP BY 1""", (maintenant - 7 * 86400,)):
+        offre[marque] += n
+    for marque, n in con.execute("""SELECT marque, SUM(n) FROM offre_jour
+                                    WHERE jour >= date(?, 'unixepoch') GROUP BY 1""", (maintenant - 7 * 86400,)):
+        offre[marque] += n
+
+    # ---------- deux vues : toute l'Europe, et France seulement (vendeurs français)
+    vue_tous = calculer_vue(suivies, ratt, maintenant, offre)
+    vue_fr = calculer_vue([a for a in suivies if pays_de(a) == "FR"],
+                          [a for a in ratt if pays_de(a) == "FR"], maintenant, offre)
+    pays = defaultdict(int)
+    for a in suivies + ratt:
+        pays[pays_de(a) or "?"] += 1
+
+    # ---------- recherches ciblées (fichiers recherches/*.json écrits par recherche.py)
+    recherches = []
+    for nom in sorted(os.listdir("recherches")) if os.path.isdir("recherches") else []:
+        if not nom.endswith(".json"):
+            continue
+        with open(os.path.join("recherches", nom), encoding="utf-8") as f:
+            r = json.load(f)
+        r.pop("a_suivre", None)
+        # suivi des annonces de cette recherche (ajoutées au suivi normal par collecte.py)
+        liees = [a for a in suivies if a.get("recherche") == r["numero"]]
+        r["suivi"] = segment_stats(liees, maintenant) if liees else None
+        recherches.append(r)
+    recherches.sort(key=lambda r: -r.get("cree_le", 0))
 
     # ---------- état du relevé
     releves = [dict(r) for r in con.execute("SELECT * FROM releves ORDER BY debut DESC LIMIT 30")]
@@ -143,7 +270,7 @@ def main():
     for a in suivies + ratt:
         if a["brut"]:
             b = json.loads(a["brut"])
-            cle = ", ".join(f"{k}={b[k]}" for k in sorted(b) if k not in ("favourite_count", "catalog_id"))
+            cle = ", ".join(f"{k}={b[k]}" for k in sorted(b) if k not in ("favourite_count", "catalog_id", "city"))
             combos[cle] += 1
     vues_total = con.execute("SELECT COUNT(*) FROM annonces").fetchone()[0] + \
         (con.execute("SELECT COALESCE(SUM(n), 0) FROM offre_jour").fetchone()[0])
@@ -156,10 +283,10 @@ def main():
         "depuis": premier,
         "resume": {"annonces_vues": vues_total, "suivies": len(suivies),
                    "rattrapage": dict(con.execute("SELECT statut, COUNT(*) FROM rattrapage GROUP BY 1").fetchall()),
-                   "statuts": statuts, "controles_en_retard": en_retard},
-        "segments": segments,
-        "ventes": [carte(a) for a in ventes[:60]],
-        "chaudes": [carte(a) for a in chaudes[:40]],
+                   "statuts": statuts, "controles_en_retard": en_retard,
+                   "pays": dict(sorted(pays.items(), key=lambda x: -x[1])[:12])},
+        "vues": {"tous": vue_tous, "fr": vue_fr},
+        "recherches": recherches,
         "releves": releves,
         "indicateurs_bruts": sorted(([k, v] for k, v in combos.items()), key=lambda x: -x[1])[:15],
         "reglages": {"n_min": N_MIN, "fenetres": list(FENETRES)},
@@ -167,8 +294,8 @@ def main():
     os.makedirs(os.path.dirname(SORTIE) or ".", exist_ok=True)
     with open(SORTIE, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"stats.json : {len(suivies)} suivies, {len(ventes)} ventes, "
-          f"{sum(len(v) for v in segments.values())} segments affichables")
+    print(f"stats.json : {len(suivies)} suivies, {len(ratt)} rattrapage, {len(vue_tous['top'])} produits au top, "
+          f"{len(vue_fr['top'])} en France")
 
 
 if __name__ == "__main__":

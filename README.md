@@ -17,7 +17,15 @@ et calcule quelles **catégories / marques / tranches de prix** se vendent le pl
    - % vendu en 24 h / 3 j / 7 j, délai médian de vente, prix de vente médian ;
    - par catégorie, marque, catégorie + marque, catégorie + tranche de prix ;
    - **score niche** = meilleur % de vente disponible, réduit quand l'échantillon est petit.
-3. Le tableau de bord (`site/index.html`) est publié sur GitHub Pages à chaque relevé.
+3. Le tableau de bord (`site/index.html`) est publié sur GitHub Pages à chaque relevé :
+   - **🔥 Top** : classement automatique des produits / catégories / marques par « indice de demande »
+     (vente 65 % + « j'aime » 35 %, 50 = moyenne Vinted) avec verdict 🔥 / 👍 / 😐 / ❄️ ;
+   - **❤️ Plus aimées** : annonces qui reçoivent le plus de « j'aime » par jour, vendues ou non ;
+   - **💰 Ventes**, **Détails** (tous les regroupements), **Relevé** (état technique) ;
+   - bascule **Europe / France** (vendeurs français seulement).
+4. **🔎 Recherche « Est-ce que ça se vend ? »** (`recherche.py`, workflow `recherche.yml`) : depuis l'onglet
+   Recherche, « Analyser » ouvre une issue GitHub « Recherche : … » ; le workflow répond dans l'issue
+   (concurrence, prix, « j'aime », ventes déjà repérées, prix conseillé) et ses annonces récentes sont suivies.
 
 La base de données (SQLite) est gardée dans la Release **`donnees`** (fichier `vinted.db.gz`,
 + `sauvegarde.db.gz` une fois par jour). **Ne pas supprimer cette Release.**

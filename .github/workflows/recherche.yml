@@ -1,0 +1,56 @@
+# Recherche ciblée « Est-ce que ça se vend ? » : se lance quand le propriétaire du dépôt ouvre une issue
+# dont le titre commence par « Recherche » (le tableau de bord prépare cette page).
+# Répond dans l'issue et enregistre recherches/<n>.json (suivi des ventes par le relevé normal).
+name: Recherche Vinted
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      texte:
+        description: "Produit à analyser (ex. Nike Tech Fleece)"
+        required: true
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: recherche
+  cancel-in-progress: false
+jobs:
+  recherche:
+    # Seulement le propriétaire du dépôt (le dépôt est public : n'importe qui peut ouvrir une issue)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.user.login == github.repository_owner &&
+       startsWith(github.event.issue.title, 'Recherche'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # passés par variables d'environnement (jamais collés dans le script : pas d'injection possible)
+      RECHERCHE_TITRE: ${{ github.event.issue.title || inputs.texte }}
+      NUMERO: ${{ github.event.issue.number || github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -q curl_cffi
+
+      - name: Récupérer la base (lecture seule)
+        run: |
+          if gh release download donnees -p vinted.db.gz --clobber 2>/dev/null; then gunzip -f vinted.db.gz; fi
+
+      - name: Analyse
+        run: python recherche.py
+
+      - name: Enregistrer la recherche
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add recherches/
+          git commit -m "Recherche n°$NUMERO" || exit 0
+          for i in 1 2 3; do git pull --rebase -q origin main && git push -q origin HEAD:main && break; sleep 5; done
+
+      - name: Répondre dans l'issue
+        if: github.event_name == 'issues'
+        run: gh issue comment "$NUMERO" --body-file commentaire.md

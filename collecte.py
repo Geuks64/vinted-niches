@@ -96,8 +96,11 @@ def ouvrir_base():
         controles INTEGER, ventes INTEGER, blocages INTEGER, note TEXT
     );
     """)
-    if "badge" not in [c[1] for c in con.execute("PRAGMA table_info(annonces)")]:
+    cols_annonces = [c[1] for c in con.execute("PRAGMA table_info(annonces)")]
+    if "badge" not in cols_annonces:
         con.execute("ALTER TABLE annonces ADD COLUMN badge TEXT")
+    if "recherche" not in cols_annonces:
+        con.execute("ALTER TABLE annonces ADD COLUMN recherche INTEGER")   # n° de la recherche ciblée
     colonnes = [c[1] for c in con.execute("PRAGMA table_info(rattrapage)")]
     if "devise" not in colonnes:
         # avant le 2026-11-08 midi la devise n'était pas lue : prix inutilisables (forints, zlotys...)
@@ -516,6 +519,36 @@ def rattrapage(v, con):
     return faits, ventes
 
 
+def suivre_recherches(con):
+    """Ajoute au suivi les annonces fraîches trouvées par les recherches ciblées (recherches/*.json)."""
+    if not os.path.isdir("recherches"):
+        return
+    n = 0
+    for nom in os.listdir("recherches"):
+        if not nom.endswith(".json"):
+            continue
+        with open(os.path.join("recherches", nom), encoding="utf-8") as f:
+            r = json.load(f)
+        for c in r.get("a_suivre", []):
+            # vue au moment de la recherche, publiée age_h heures avant
+            vu_le = int(r["cree_le"] - (c.get("age_h") or 0) * 3600)
+            cur = con.execute(
+                """INSERT OR IGNORE INTO annonces (id, vu_le, titre, marque, taille, etat, prix, prix_total, devise,
+                   favoris0, pro, miniature, url, suivi, prochain_controle, badge, recherche)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
+                (c["id"], vu_le, c.get("titre"), c.get("marque"), c.get("taille"), c.get("etat"), c.get("prix"),
+                 c.get("prix_total"), c.get("devise"), c.get("favoris0"), c.get("pro"), c.get("miniature"),
+                 c.get("url"), vu_le + CONTROLES_H[0] * 3600, c.get("badge"), r["numero"]))
+            if cur.rowcount == 0:   # déjà vue par le relevé : on la rattache à la recherche et on la suit
+                con.execute("""UPDATE annonces SET recherche = ?, suivi = 1, prochain_controle = COALESCE(
+                    prochain_controle, CASE WHEN n_controles = 0 THEN vu_le + ? END) WHERE id = ? AND recherche IS NULL""",
+                            (r["numero"], CONTROLES_H[0] * 3600, c["id"]))
+            n += cur.rowcount
+    con.commit()
+    if n:
+        log(f"Recherches ciblées : {n} nouvelles annonces ajoutées au suivi")
+
+
 def reclasser(con):
     """Réapplique statut_depuis() aux annonces déjà lues (utile quand la règle de détection change)."""
     n = 0
@@ -560,6 +593,7 @@ def compacter(con):
 def main():
     con = ouvrir_base()
     reclasser(con)
+    suivre_recherches(con)
     v = Vinted()
     r = v.get("/")
     log("Accueil :", r.status_code if r is not None else "erreur")

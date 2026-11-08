@@ -46,6 +46,13 @@
   du dépôt. Étape « Relance de secours » : si aucun relevé planifié dans les 45 dernières min et aucun relevé en
   attente, le workflow attend que 20 min soient écoulées depuis son début puis relance `releve.yml`
   (s'arrête tout seul dès que le cron marche).
+- **Top / Plus aimées / Recherche / France** (2026-11-08) : `stats.py` calcule 2 vues (`vues.tous`, `vues.fr` via
+  `pays_de()` qui lit une clé *country* dans `brut` — nom exact de la clé à vérifier dans les logs), `top`
+  (indice = 50 × (0,65 × vente/moyenne + 0,35 × j'aime/moyenne), petits échantillons ramenés vers la moyenne),
+  `aimees`. Badge « en demande » lu sur les cartes (`itemBox.badge` → colonne `annonces.badge`) et les pages.
+  Recherche : issue « Recherche : X » ouverte par le propriétaire → `recherche.yml` → `recherches/<n>.json`
+  (commité) + commentaire ; `collecte.suivre_recherches()` ajoute ses annonces fraîches au suivi (colonne
+  `annonces.recherche`).
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

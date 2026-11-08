@@ -10,41 +10,32 @@
 /* ---------- Couleurs (clair / sombre) ---------- */
 :root {
   color-scheme: light;
-  --fond: #f6f6f4;
-  --carte: #fcfcfb;
-  --bord: #e3e2de;
-  --texte: #0b0b0b;
-  --texte-2: #52514e;
-  --texte-3: #7a7974;
-  --accent: #0f766e;
-  --accent-doux: #d9efec;
-  --barre: #2a78d6;        /* barres de magnitude (une seule teinte) */
-  --barre-fond: #e8eef7;
-  --bon: #0f7b3e;
-  --alerte: #a15c00;
+  --fond: #f6f6f4; --carte: #fcfcfb; --bord: #e3e2de;
+  --texte: #0b0b0b; --texte-2: #52514e; --texte-3: #7a7974;
+  --accent: #0f766e; --accent-doux: #d9efec;
+  --barre: #2a78d6; --barre-fond: #e8eef7;          /* barres de magnitude (une seule teinte) */
+  --chaud: #b4410f; --chaud-doux: #fbe6dc;           /* 🔥 très demandé */
+  --bon: #0f7b3e; --bon-doux: #dcf1e4;               /* 👍 se vend bien */
+  --froid: #3f5f8a; --froid-doux: #e3eaf4;           /* ❄️ à éviter */
+  --neutre-doux: #eceae6;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --fond: #121211;
-    --carte: #1a1a19;
-    --bord: #2e2d2b;
-    --texte: #f0efec;
-    --texte-2: #c3c2b7;
-    --texte-3: #94938b;
-    --accent: #2bb3a5;
-    --accent-doux: #12312e;
-    --barre: #3987e5;
-    --barre-fond: #22303f;
-    --bon: #4cc47e;
-    --alerte: #e0a33a;
+    --fond: #121211; --carte: #1a1a19; --bord: #2e2d2b;
+    --texte: #f0efec; --texte-2: #c3c2b7; --texte-3: #94938b;
+    --accent: #2bb3a5; --accent-doux: #12312e; --barre: #3987e5; --barre-fond: #22303f;
+    --chaud: #f08a5d; --chaud-doux: #3a2219; --bon: #4cc47e; --bon-doux: #15301f;
+    --froid: #8fb0dc; --froid-doux: #1c2633; --neutre-doux: #262523;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --fond: #121211; --carte: #1a1a19; --bord: #2e2d2b; --texte: #f0efec; --texte-2: #c3c2b7;
-  --texte-3: #94938b; --accent: #2bb3a5; --accent-doux: #12312e; --barre: #3987e5;
-  --barre-fond: #22303f; --bon: #4cc47e; --alerte: #e0a33a;
+  --fond: #121211; --carte: #1a1a19; --bord: #2e2d2b;
+  --texte: #f0efec; --texte-2: #c3c2b7; --texte-3: #94938b;
+  --accent: #2bb3a5; --accent-doux: #12312e; --barre: #3987e5; --barre-fond: #22303f;
+  --chaud: #f08a5d; --chaud-doux: #3a2219; --bon: #4cc47e; --bon-doux: #15301f;
+  --froid: #8fb0dc; --froid-doux: #1c2633; --neutre-doux: #262523;
 }
 
 * { box-sizing: border-box; }
@@ -57,16 +48,26 @@ header {
   position: sticky; top: 0; z-index: 5; background: var(--fond);
   padding: calc(10px + env(safe-area-inset-top)) 16px 0; border-bottom: 1px solid var(--bord);
 }
-h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: -0.01em; }
-.maj { color: var(--texte-3); font-size: 12.5px; margin-bottom: 8px; }
-nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.ligne-titre { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+.maj { color: var(--texte-3); font-size: 12.5px; margin: 2px 0 8px; }
+/* Bascule Europe / France */
+.bascule { display: inline-flex; background: var(--neutre-doux); border-radius: 99px; padding: 3px; flex: none; }
+.bascule button {
+  border: 0; background: none; color: var(--texte-2); font: inherit; font-size: 13px; font-weight: 600;
+  padding: 5px 11px; border-radius: 99px; cursor: pointer;
+}
+.bascule button[aria-pressed="true"] { background: var(--carte); color: var(--texte); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+nav::-webkit-scrollbar { display: none; }
 nav button {
   flex: none; border: 0; background: none; color: var(--texte-2); font: inherit; font-weight: 600;
-  padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer;
+  padding: 8px 10px; border-bottom: 2px solid transparent; cursor: pointer;
 }
 nav button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
 main { padding: 14px 16px 40px; max-width: 980px; margin: 0 auto; }
 section[hidden] { display: none; }
+h2 { font-size: 16px; margin: 18px 0 8px; }
 
 /* Tuiles de chiffres clés */
 .tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 14px; }
@@ -81,28 +82,36 @@ section[hidden] { display: none; }
   border-radius: 10px; padding: 8px 10px; min-width: 0;
 }
 .filtres input { flex: 1 1 180px; }
+.puces { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-bottom: 10px; }
+.puces button {
+  flex: none; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--texte-2);
+  background: var(--carte); border: 1px solid var(--bord); border-radius: 99px; padding: 6px 12px; cursor: pointer;
+}
+.puces button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .aide { color: var(--texte-2); font-size: 13px; margin: 0 0 12px; }
 .aide summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 
-/* Liste des niches */
-.niche {
-  background: var(--carte); border: 1px solid var(--bord); border-radius: 12px;
-  padding: 10px 12px; margin-bottom: 8px;
-}
+/* Cartes « produit » (Top du moment, détails) */
+.niche { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
 .niche .haut { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .niche .nom { font-weight: 600; overflow-wrap: anywhere; }
 .niche .score { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.verdict { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-bottom: 4px; }
+.v-tres_demande { background: var(--chaud-doux); color: var(--chaud); }
+.v-bien { background: var(--bon-doux); color: var(--bon); }
+.v-moyen { background: var(--neutre-doux); color: var(--texte-2); }
+.v-eviter { background: var(--froid-doux); color: var(--froid); }
 .jauge { height: 8px; background: var(--barre-fond); border-radius: 4px; margin: 6px 0 8px; overflow: hidden; }
 .jauge i { display: block; height: 100%; background: var(--barre); border-radius: 0 4px 4px 0; }
 .chiffres { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--texte-2); }
 .chiffres b { color: var(--texte); font-variant-numeric: tabular-nums; }
 .vide { color: var(--texte-2); background: var(--carte); border: 1px dashed var(--bord); border-radius: 12px; padding: 16px; }
 
-/* Cartes d'annonces (ventes, tendances) */
+/* Cartes d'annonces */
 .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .annonce {
   background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; overflow: hidden;
-  color: inherit; text-decoration: none; display: flex; flex-direction: column;
+  color: inherit; text-decoration: none; display: flex; flex-direction: column; position: relative;
 }
 .annonce img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--barre-fond); display: block; }
 .annonce .info { padding: 8px 10px; font-size: 13px; }
@@ -111,77 +120,138 @@ section[hidden] { display: none; }
 .annonce .m { color: var(--texte-2); }
 .badge { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 99px;
   background: var(--accent-doux); color: var(--accent); margin-top: 4px; }
+.etiquette { position: absolute; top: 8px; left: 8px; font-size: 11.5px; font-weight: 700; padding: 2px 8px;
+  border-radius: 99px; background: var(--carte); color: var(--texte); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.etiquette.vendue { background: var(--bon); color: #fff; }
 
-/* Tableau d'état */
-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--carte); border-radius: 12px; overflow: hidden; }
+/* Recherche */
+.recherche-form { display: flex; gap: 8px; margin-bottom: 8px; }
+.recherche-form input {
+  flex: 1; min-width: 0; font: inherit; color: var(--texte); background: var(--carte);
+  border: 1px solid var(--bord); border-radius: 10px; padding: 10px 12px;
+}
+.bouton { font: inherit; font-weight: 700; color: #fff; background: var(--accent); border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+.res { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+.res h3 { margin: 0 0 4px; font-size: 16px; }
+.res .quand { color: var(--texte-3); font-size: 12px; }
+.res ul { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--texte-2); }
+.res ul b { color: var(--texte); }
+.res a { color: var(--accent); }
+
+/* Tableaux */
+table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--carte); }
 th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--bord); font-variant-numeric: tabular-nums; }
 th { color: var(--texte-2); font-weight: 600; }
 .defile { overflow-x: auto; border: 1px solid var(--bord); border-radius: 12px; margin-bottom: 14px; }
-h2 { font-size: 16px; margin: 18px 0 8px; }
 .ok { color: var(--bon); font-weight: 600; }
-.ko { color: var(--alerte); font-weight: 600; }
+.ko { color: var(--chaud); font-weight: 600; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Niches Vinted</h1>
+  <div class="ligne-titre">
+    <h1>Niches Vinted</h1>
+    <div class="bascule" role="group" aria-label="Pays des vendeurs">
+      <button data-vue="tous" aria-pressed="true">Europe</button>
+      <button data-vue="fr" aria-pressed="false">France</button>
+    </div>
+  </div>
   <div class="maj" id="maj">Chargement…</div>
   <nav role="tablist">
-    <button role="tab" data-onglet="niches" aria-selected="true">Niches</button>
-    <button role="tab" data-onglet="ventes" aria-selected="false">Ventes en direct</button>
-    <button role="tab" data-onglet="chaudes" aria-selected="false">Annonces qui plaisent</button>
+    <button role="tab" data-onglet="top" aria-selected="true">🔥 Top</button>
+    <button role="tab" data-onglet="aimees" aria-selected="false">❤️ Plus aimées</button>
+    <button role="tab" data-onglet="ventes" aria-selected="false">💰 Ventes</button>
+    <button role="tab" data-onglet="recherche" aria-selected="false">🔎 Recherche</button>
+    <button role="tab" data-onglet="details" aria-selected="false">Détails</button>
     <button role="tab" data-onglet="etat" aria-selected="false">Relevé</button>
   </nav>
 </header>
 
 <main>
-  <section id="niches">
-    <div class="tuiles" id="tuiles"></div>
+  <!-- ================= TOP DU MOMENT ================= -->
+  <section id="top">
+    <div class="tuiles" id="tuiles-top"></div>
+    <div class="puces" id="puces-top" role="group" aria-label="Type">
+      <button data-type="" aria-pressed="true">Tout</button>
+      <button data-type="produit" aria-pressed="false">Produits</button>
+      <button data-type="categorie_large" aria-pressed="false">Catégories</button>
+      <button data-type="marque" aria-pressed="false">Marques</button>
+    </div>
+    <div class="filtres">
+      <input id="cherche-top" type="search" placeholder="Filtrer (ex. sweat, nike, enfants)" aria-label="Filtrer">
+    </div>
+    <details class="aide">
+      <summary>Comment est calculé le classement ?</summary>
+      <p>Chaque produit (catégorie + marque), catégorie ou marque reçoit un <b>indice de demande</b> (sur 100,
+      50 = moyenne de Vinted) qui combine :</p>
+      <p>💰 <b>la vente</b> (65 %) : part des annonces vendues en 7 jours, comparée à la moyenne ;<br>
+      ❤️ <b>l'intérêt</b> (35 %) : « j'aime » reçus par jour en ligne, comparés à la moyenne.</p>
+      <p>🔥 Très demandé = se vend nettement plus vite que la moyenne · 👍 Se vend bien = au-dessus de la moyenne ·
+      😐 Moyen · ❄️ À éviter = se vend peu et intéresse peu. Les petits échantillons sont ramenés vers la moyenne
+      pour éviter les faux bons plans. Les chiffres s'affinent au fil des jours.</p>
+    </details>
+    <div id="liste-top"></div>
+  </section>
+
+  <!-- ================= PLUS AIMÉES ================= -->
+  <section id="aimees" hidden>
+    <p class="aide">Annonces qui reçoivent le plus de « j'aime » par jour (7 derniers jours de relevé) — vendues ou non.
+      Pratique pour repérer les produits qui font envie.</p>
+    <div class="grille" id="grille-aimees"></div>
+  </section>
+
+  <!-- ================= VENTES ================= -->
+  <section id="ventes" hidden>
+    <p class="aide">Dernières ventes détectées, la plus récente en premier.</p>
+    <div class="grille" id="grille-ventes"></div>
+  </section>
+
+  <!-- ================= RECHERCHE ================= -->
+  <section id="recherche" hidden>
+    <form class="recherche-form" id="form-recherche">
+      <input id="texte-recherche" type="search" placeholder="Ex. Nike Tech Fleece, Lego Star Wars…" aria-label="Produit à analyser" required>
+      <button class="bouton" type="submit">Analyser</button>
+    </form>
+    <details class="aide" open>
+      <summary>Comment ça marche ?</summary>
+      <p>« Analyser » ouvre une page GitHub déjà remplie : appuie sur <b>Create</b> (ou « Submit new issue »).
+      Environ 2 min plus tard, la réponse s'affiche sur cette page GitHub et ici : concurrence, prix pratiqués,
+      « j'aime », ventes déjà repérées, prix conseillé. Les annonces récentes du produit sont ensuite suivies pour
+      mesurer le % vendu réel (résultats sous 1 à 7 jours).</p>
+    </details>
+    <div id="liste-recherches"></div>
+  </section>
+
+  <!-- ================= DÉTAILS ================= -->
+  <section id="details" hidden>
     <div class="filtres">
       <select id="type" aria-label="Regrouper par">
         <option value="categorie_large">Par catégorie (large)</option>
         <option value="categorie">Par catégorie (précise)</option>
+        <option value="produit">Par produit (catégorie + marque)</option>
         <option value="marque">Par marque</option>
-        <option value="categorie_marque">Catégorie + marque</option>
+        <option value="categorie_marque">Catégorie précise + marque</option>
         <option value="categorie_prix">Catégorie + prix</option>
       </select>
       <select id="tri" aria-label="Trier par">
-        <option value="score">Tri : score niche</option>
+        <option value="score">Tri : score de vente</option>
         <option value="taux_24h">Tri : % vendu en 24 h</option>
         <option value="taux_3j">Tri : % vendu en 3 j</option>
         <option value="taux_7j">Tri : % vendu en 7 j</option>
+        <option value="favoris_jour">Tri : « j'aime » par jour</option>
         <option value="prix_vendu">Tri : prix de vente</option>
-        <option value="n">Tri : nb d'annonces suivies</option>
+        <option value="n">Tri : nb d'annonces</option>
       </select>
-      <input id="cherche" type="search" placeholder="Filtrer (ex. robe, nike, 20–40)" aria-label="Filtrer">
+      <input id="cherche" type="search" placeholder="Filtrer" aria-label="Filtrer">
     </div>
-    <details class="aide">
-      <summary>Comment lire ces chiffres ?</summary>
-      <p>L'outil relève les nouvelles annonces Vinted toutes les 20 min et en suit une partie au hasard :
-      il revient voir chaque annonce suivie après 6 h, 24 h, 3 j et 7 j pour savoir si elle est vendue.</p>
-      <p><b>% vendu en 24 h / 3 j / 7 j</b> : part des annonces vendues dans ce délai (calculé seulement
-      quand l'échantillon est assez grand). <b>Score niche</b> : le meilleur de ces pourcentages, réduit
-      quand il y a peu d'annonces (pour éviter les faux bons plans). <b>Offre 7 j</b> (marques) :
-      nombre de nouvelles annonces vues sur 7 jours — beaucoup de ventes + peu d'offre = bonne niche.</p>
-      <p><b>Rattrapage</b> : pour ne pas attendre une semaine, l'outil va aussi voir à chaque relevé des annonces
-      publiées il y a ~1 j, ~3 j et ~7 j (au hasard) et note si elles sont déjà vendues. Les premiers chiffres
-      apparaissent donc en quelques heures ; ils s'affinent avec le suivi normal au fil des jours.</p>
-    </details>
     <div id="liste"></div>
   </section>
 
-  <section id="ventes" hidden>
-    <p class="aide">Dernières ventes détectées (annonces suivies et rattrapage), la plus récente en premier.</p>
-    <div class="grille" id="grille-ventes"></div>
-  </section>
-
-  <section id="chaudes" hidden>
-    <p class="aide">Annonces des dernières 48 h qui gagnent le plus de favoris par heure — signe d'une forte demande.</p>
-    <div class="grille" id="grille-chaudes"></div>
-  </section>
-
+  <!-- ================= ÉTAT DU RELEVÉ ================= -->
   <section id="etat" hidden>
     <div class="tuiles" id="tuiles-etat"></div>
+    <h2>Pays des vendeurs (annonces analysées)</h2>
+    <div class="defile"><table id="table-pays"></table></div>
     <h2>Derniers relevés</h2>
     <div class="defile"><table id="table-releves"></table></div>
     <h2>Indicateurs lus sur les pages (contrôle technique)</h2>
@@ -192,6 +262,7 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 <script>
 // ---------- utilitaires
 const $ = (s) => document.querySelector(s);
+const DEPOT = "https://github.com/Geuks64/vinted-niches";
 const fmt = (x, suf = "") => (x === null || x === undefined) ? "—" : `${String(x).replace(".", ",")}${suf}`;
 const euros = (x) => (x === null || x === undefined) ? "—" : `${Number(x).toFixed(2).replace(".", ",")} €`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -203,67 +274,165 @@ const quand = (ts) => {
   if (min < 48 * 60) return `il y a ${Math.round(min / 60)} h`;
   return `il y a ${Math.round(min / 1440)} j`;
 };
+const duree = (h) => h == null ? "—" : (h < 24 ? `${Math.round(h)} h` : `${Math.round(h / 24)} j`);
 const delai = (a, b) => {
   const t = (h) => h < 24 ? `${h} h` : `${Math.round(h / 24)} j`;
   if (b === null || b === undefined) return "";
   return !a ? `en moins de ${t(b)}` : `entre ${t(a)} et ${t(b)}`;
 };
+const VERDICTS = { tres_demande: "🔥 Très demandé", bien: "👍 Se vend bien", moyen: "😐 Moyen", eviter: "❄️ À éviter" };
+const TYPES = { produit: "Produit", categorie_large: "Catégorie", marque: "Marque" };
+const memo = (k, v) => { try { v === undefined ? (v = localStorage.getItem(k)) : localStorage.setItem(k, v); } catch (e) {} return v; };
 
 let S = null;
+let vue = memo("vue") || "tous";
+let typeTop = "";
+// Ancien format de stats.json (avant les vues) : on le lit comme la vue « tous »
+const V = () => (S.vues ? (S.vues[vue] || S.vues.tous) : S);
 
 // ---------- onglets
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll("nav button").forEach((x) => x.setAttribute("aria-selected", x === b));
   document.querySelectorAll("main section").forEach((s) => s.hidden = s.id !== b.dataset.onglet);
-  try { localStorage.setItem("onglet", b.dataset.onglet); } catch (e) {}
+  memo("onglet", b.dataset.onglet);
+}));
+// ---------- bascule Europe / France
+document.querySelectorAll(".bascule button").forEach((b) => b.addEventListener("click", () => {
+  vue = b.dataset.vue; memo("vue", vue);
+  document.querySelectorAll(".bascule button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  if (S) afficherTout();
+}));
+document.querySelectorAll(".bascule button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.vue === vue));
+document.querySelectorAll("#puces-top button").forEach((b) => b.addEventListener("click", () => {
+  typeTop = b.dataset.type;
+  document.querySelectorAll("#puces-top button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  afficherTop();
 }));
 
-// ---------- niches
-function afficherNiches() {
-  const type = $("#type").value, tri = $("#tri").value;
-  const q = $("#cherche").value.trim().toLowerCase();
-  let lignes = (S.segments[type] || []).filter((l) => !q || l.nom.toLowerCase().includes(q));
-  lignes = [...lignes].sort((a, b) => (b[tri] ?? -1) - (a[tri] ?? -1));
+const videFr = () => vue === "fr" ? `<div class="vide">Pas encore assez d'annonces de vendeurs français identifiées.
+  Repasse en « Europe » en attendant : le pays des vendeurs n'est lu que depuis peu.</div>` : null;
+
+// ---------- Top du moment
+function afficherTop() {
+  const v = V(), ref = v.reference || {};
+  $("#tuiles-top").innerHTML = [
+    [fmt(ref.taux_7j, " %"), "vendues en 7 j (moyenne)"],
+    [fmt(ref.favoris_jour), "« j'aime » / jour (moyenne)"],
+    [v.n_annonces ?? "—", "annonces analysées"],
+  ].map(([x, t]) => `<div class="tuile"><b>${x}</b><span>${t}</span></div>`).join("");
+  const q = $("#cherche-top").value.trim().toLowerCase();
+  const lignes = (v.top || []).filter((l) => (!typeTop || l.type === typeTop) && (!q || l.nom.toLowerCase().includes(q)));
   if (!lignes.length) {
-    $("#liste").innerHTML = `<div class="vide">Pas encore assez de données ici : il faut au moins ${S.reglages.n_min}
-      annonces par groupe. Les premiers groupes apparaissent après quelques relevés.</div>`;
+    $("#liste-top").innerHTML = videFr() || `<div class="vide">Pas encore assez de données (il faut au moins
+      ${S.reglages.n_min} annonces par groupe). Le classement se remplit à chaque relevé.</div>`;
     return;
   }
-  const max = Math.max(1, ...lignes.map((l) => l.score || 0));
-  $("#liste").innerHTML = lignes.slice(0, 150).map((l) => `
+  $("#liste-top").innerHTML = lignes.slice(0, 120).map((l) => `
     <div class="niche">
+      <span class="verdict v-${l.verdict}">${VERDICTS[l.verdict]}</span>
       <div class="haut"><span class="nom">${esc(l.nom)}</span>
-        <span class="score" title="Score niche (fenêtre ${l.fenetre || "—"})">${fmt(l.score)}</span></div>
-      <div class="jauge" title="Score ${fmt(l.score)}"><i style="width:${Math.round(100 * (l.score || 0) / max)}%"></i></div>
+        <span class="score" title="Indice de demande (50 = moyenne)">${fmt(l.indice)}</span></div>
+      <div class="jauge" title="Indice ${fmt(l.indice)} / 100"><i style="width:${Math.min(100, l.indice)}%"></i></div>
       <div class="chiffres">
-        <span>24 h <b>${fmt(l.taux_24h, " %")}</b></span>
-        <span>3 j <b>${fmt(l.taux_3j, " %")}</b></span>
-        <span>7 j <b>${fmt(l.taux_7j, " %")}</b></span>
-        <span>délai médian <b>${l.delai_h == null ? "—" : (l.delai_h < 24 ? Math.round(l.delai_h) + " h" : Math.round(l.delai_h / 24) + " j")}</b></span>
+        <span>💰 <b>${fmt(l.taux_7j_estime, " %")}</b> vendus en 7 j</span>
+        <span>❤️ <b>${fmt(l.favoris_jour)}</b> / jour</span>
         <span>prix vendu <b>${euros(l.prix_vendu)}</b></span>
         <span>prix annonces <b>${euros(l.prix)}</b></span>
-        <span>suivies <b>${l.n}</b> · vendues <b>${l.vendues}</b></span>
-        ${l.offre_7j !== undefined ? `<span>offre 7 j <b>${l.offre_7j}</b></span>` : ""}
+        ${l.delai_h != null ? `<span>délai <b>${duree(l.delai_h)}</b></span>` : ""}
+        ${l.part_demande ? `<span>🔥 badge <b>${fmt(l.part_demande, " %")}</b></span>` : ""}
+        <span>${TYPES[l.type]} · <b>${l.n}</b> annonces · <b>${l.vendues}</b> vendues</span>
       </div>
     </div>`).join("");
 }
-["type", "tri"].forEach((id) => $("#" + id).addEventListener("change", afficherNiches));
-$("#cherche").addEventListener("input", afficherNiches);
+$("#cherche-top").addEventListener("input", afficherTop);
 
 // ---------- cartes d'annonces
-function carte(a, vente) {
-  const prix = vente && a.prix_final ? a.prix_final : a.prix;
+function carte(a, mode) {
+  const prix = a.prix_final || a.prix;
+  let bas = "";
+  if (mode === "vente") {
+    bas = a.rattrapage ? `<span class="badge">Vendu · mis en ligne ${esc(quand(a.vu_le))}</span>`
+                       : `<span class="badge">Vendu ${esc(delai(a.vendu_apres_h, a.vendu_avant_h))}</span>`;
+  } else {
+    bas = `<span class="badge">${fmt(a.favoris_jour)} ♥ / jour · ${a.favoris ?? 0} ♥</span>`;
+  }
+  const etiq = mode === "aimee" ? (a.statut === "vendu" ? `<span class="etiquette vendue">Vendue</span>`
+                                                        : `<span class="etiquette">En vente</span>`) : "";
   return `<a class="annonce" href="https://www.vinted.fr${esc(a.url || "/items/" + a.id)}" target="_blank" rel="noopener">
-    <img loading="lazy" src="${esc(a.miniature)}" alt="">
+    ${etiq}<img loading="lazy" src="${esc(a.miniature)}" alt="">
     <div class="info">
       <div class="t">${esc(a.titre)}</div>
       <div class="p">${euros(prix)}</div>
       <div class="m">${esc([a.marque, a.taille, a.etat].filter(Boolean).join(" · "))}</div>
       <div class="m">${esc(a.categorie || "")}</div>
-      ${vente ? (a.rattrapage ? `<span class="badge">Vendu · mis en ligne ${esc(quand(a.vu_le))}</span>`
-                               : `<span class="badge">Vendu ${esc(delai(a.vendu_apres_h, a.vendu_avant_h))}</span>`)
-              : `<span class="badge">${a.favoris} ♥ · ${esc(quand(a.vu_le))}</span>`}
+      ${a.badge ? `<span class="badge">🔥 En demande</span> ` : ""}${bas}
     </div></a>`;
+}
+function afficherGrilles() {
+  const v = V();
+  $("#grille-aimees").innerHTML = (v.aimees || []).length ? v.aimees.map((a) => carte(a, "aimee")).join("")
+    : (videFr() || `<div class="vide">Pas encore de données.</div>`);
+  $("#grille-ventes").innerHTML = (v.ventes || []).length ? v.ventes.map((a) => carte(a, "vente")).join("")
+    : (videFr() || `<div class="vide">Aucune vente détectée pour l'instant.</div>`);
+}
+
+// ---------- détails (tous les groupes)
+function afficherDetails() {
+  const type = $("#type").value, tri = $("#tri").value;
+  const q = $("#cherche").value.trim().toLowerCase();
+  let lignes = ((V().segments || {})[type] || []).filter((l) => !q || l.nom.toLowerCase().includes(q));
+  lignes = [...lignes].sort((a, b) => (b[tri] ?? -1) - (a[tri] ?? -1));
+  if (!lignes.length) {
+    $("#liste").innerHTML = videFr() || `<div class="vide">Pas encore assez de données ici.</div>`;
+    return;
+  }
+  const max = Math.max(1, ...lignes.map((l) => l.score || 0));
+  $("#liste").innerHTML = lignes.slice(0, 150).map((l) => `
+    <div class="niche">
+      <div class="haut"><span class="nom">${esc(l.nom)}</span><span class="score">${fmt(l.score)}</span></div>
+      <div class="jauge"><i style="width:${Math.round(100 * (l.score || 0) / max)}%"></i></div>
+      <div class="chiffres">
+        <span>24 h <b>${fmt(l.taux_24h, " %")}</b></span><span>3 j <b>${fmt(l.taux_3j, " %")}</b></span>
+        <span>7 j <b>${fmt(l.taux_7j, " %")}</b></span><span>❤️ <b>${fmt(l.favoris_jour)}</b> / jour</span>
+        <span>prix vendu <b>${euros(l.prix_vendu)}</b></span><span>prix annonces <b>${euros(l.prix)}</b></span>
+        <span>annonces <b>${l.n}</b> · vendues <b>${l.vendues}</b></span>
+        ${l.offre_7j !== undefined ? `<span>offre 7 j <b>${l.offre_7j}</b></span>` : ""}
+      </div>
+    </div>`).join("");
+}
+["type", "tri"].forEach((id) => $("#" + id).addEventListener("change", afficherDetails));
+$("#cherche").addEventListener("input", afficherDetails);
+
+// ---------- recherche ciblée
+$("#form-recherche").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const t = $("#texte-recherche").value.trim();
+  if (!t) return;
+  const corps = "Analyse demandée depuis le tableau de bord.\n\nValide simplement cette page (bouton « Create »). " +
+    "La réponse arrivera ici en commentaire dans ~2 minutes, et sur le tableau de bord (onglet Recherche).";
+  window.open(`${DEPOT}/issues/new?title=${encodeURIComponent("Recherche : " + t)}&body=${encodeURIComponent(corps)}`, "_blank");
+});
+function afficherRecherches() {
+  const rs = S.recherches || [];
+  if (!rs.length) { $("#liste-recherches").innerHTML = `<div class="vide">Aucune recherche pour l'instant.</div>`; return; }
+  $("#liste-recherches").innerHTML = rs.map((r) => {
+    const h = r.historique, s = r.suivi;
+    const suivi = s && s.n ? `<li>Suivi depuis la recherche : <b>${s.vendues}</b> vendues sur ${s.n}
+        · 24 h ${fmt(s.taux_24h, " %")} · 3 j ${fmt(s.taux_3j, " %")} · 7 j ${fmt(s.taux_7j, " %")}
+        · prix vendu <b>${euros(s.prix_vendu)}</b></li>`
+      : `<li>Suivi : ${r.nb_suivies || 0} annonces suivies, premiers résultats sous 24 h.</li>`;
+    return `<div class="res">
+      <h3>${esc(r.texte)}</h3>
+      <div class="quand">${esc(quand(r.cree_le))} · <a href="${DEPOT}/issues/${r.numero}" target="_blank" rel="noopener">détail</a></div>
+      ${r.verdict ? `<p style="margin:6px 0 0;font-weight:700">${esc(r.verdict)}</p>` : ""}
+      <ul>
+        <li>En ligne : <b>${r.en_ligne ?? "—"}</b> annonces · nouvelles / jour : <b>${r.nouvelles_par_jour ?? "—"}</b></li>
+        <li>Prix : bas ${euros(r.prix_bas)} · moyen <b>${euros(r.prix_median)}</b> · haut ${euros(r.prix_haut)}</li>
+        <li>❤️ <b>${fmt(r.favoris_jour)}</b> / jour par annonce (moyenne Vinted ${fmt(r.favoris_jour_moyen_vinted)})</li>
+        ${h ? `<li>Déjà repérées : <b>${h.vendues}</b> vendues sur ${h.n} · prix vendu <b>${euros(h.prix_vendu)}</b></li>` : ""}
+        ${suivi}
+      </ul></div>`;
+  }).join("");
 }
 
 // ---------- état du relevé
@@ -271,18 +440,22 @@ function afficherEtat() {
   const r = S.resume, st = r.statuts || {}, ra = r.rattrapage || {};
   const raLues = Object.entries(ra).filter(([k]) => k !== "supprime").reduce((t, [, v]) => t + v, 0);
   $("#tuiles-etat").innerHTML = [
-    [r.annonces_vues, "annonces vues"], [r.suivies, "annonces suivies"], [st.vendu || 0, "ventes détectées (suivi)"],
-    [st.en_vente || 0, "toujours en vente"], [st.supprime || 0, "supprimées"], [r.controles_en_retard, "contrôles en retard"],
-    [raLues, "anciennes annonces lues (rattrapage)"], [ra.vendu || 0, "dont vendues"], [ra.supprime || 0, "numéros absents"],
+    [r.annonces_vues, "annonces vues"], [r.suivies, "annonces suivies"], [st.vendu || 0, "ventes (suivi)"],
+    [raLues, "anciennes annonces lues"], [ra.vendu || 0, "dont vendues"], [r.controles_en_retard, "contrôles en retard"],
   ].map(([v, t]) => `<div class="tuile"><b>${v ?? 0}</b><span>${t}</span></div>`).join("");
+  const pays = Object.entries(r.pays || {});
+  $("#table-pays").innerHTML = `<tr><th>Pays</th><th>Annonces</th></tr>` +
+    (pays.length ? pays.map(([p, n]) => `<tr><td>${p === "?" ? "inconnu (lu depuis peu)" : esc(p)}</td><td>${n}</td></tr>`).join("") : "");
   $("#table-releves").innerHTML = `<tr><th>Début</th><th>Durée</th><th>Vues</th><th>Nouvelles</th><th>Contrôles</th><th>Ventes</th><th>État</th></tr>` +
     S.releves.map((x) => `<tr><td>${new Date(x.debut * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
       <td>${Math.round(x.duree / 60)} min</td><td>${x.vues}</td><td>${x.nouvelles}</td><td>${x.controles}</td><td>${x.ventes}</td>
       <td class="${x.note ? "ko" : "ok"}">${x.note ? esc(x.note) : (x.blocages ? x.blocages + " refus" : "OK")}</td></tr>`).join("");
   $("#table-bruts").innerHTML = `<tr><th>Indicateurs</th><th>Annonces</th></tr>` +
     (S.indicateurs_bruts.length ? S.indicateurs_bruts.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")
-      : `<tr><td colspan="2">Aucun contrôle encore effectué (premiers contrôles 6 h après le lancement).</td></tr>`);
+      : `<tr><td colspan="2">Aucun contrôle encore effectué.</td></tr>`);
 }
+
+function afficherTout() { afficherTop(); afficherGrilles(); afficherDetails(); afficherRecherches(); afficherEtat(); }
 
 // ---------- chargement
 async function charger() {
@@ -294,21 +467,10 @@ async function charger() {
     return;
   }
   $("#maj").textContent = `Mis à jour ${quand(S.genere_le)}` + (S.depuis ? ` · relevé lancé ${quand(S.depuis)}` : "");
-  const st = S.resume.statuts || {};
-  $("#tuiles").innerHTML = [
-    [S.resume.annonces_vues, "annonces vues"], [S.resume.suivies, "annonces suivies"], [st.vendu || 0, "ventes détectées"],
-  ].map(([v, t]) => `<div class="tuile"><b>${v ?? 0}</b><span>${t}</span></div>`).join("");
-  afficherNiches();
-  $("#grille-ventes").innerHTML = S.ventes.length ? S.ventes.map((a) => carte(a, true)).join("")
-    : `<div class="vide">Aucune vente détectée pour l'instant (premiers contrôles 6 h après le lancement).</div>`;
-  $("#grille-chaudes").innerHTML = S.chaudes.length ? S.chaudes.map((a) => carte(a, false)).join("")
-    : `<div class="vide">Pas encore de données (premiers contrôles 6 h après le lancement).</div>`;
-  afficherEtat();
+  afficherTout();
 }
-try {
-  const o = localStorage.getItem("onglet");
-  if (o) document.querySelector(`nav button[data-onglet="${o}"]`)?.click();
-} catch (e) {}
+const o = memo("onglet");
+if (o) document.querySelector(`nav button[data-onglet="${o}"]`)?.click();
 charger();
 setInterval(charger, 5 * 60 * 1000);   // se rafraîchit seul toutes les 5 min
 </script>
