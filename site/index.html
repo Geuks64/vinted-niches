@@ -162,13 +162,15 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
       quand l'échantillon est assez grand). <b>Score niche</b> : le meilleur de ces pourcentages, réduit
       quand il y a peu d'annonces (pour éviter les faux bons plans). <b>Offre 7 j</b> (marques) :
       nombre de nouvelles annonces vues sur 7 jours — beaucoup de ventes + peu d'offre = bonne niche.</p>
-      <p>Les premiers chiffres apparaissent après ~24 h de relevé, et deviennent fiables après une semaine.</p>
+      <p><b>Rattrapage</b> : pour ne pas attendre une semaine, l'outil va aussi voir à chaque relevé des annonces
+      publiées il y a ~1 j, ~3 j et ~7 j (au hasard) et note si elles sont déjà vendues. Les premiers chiffres
+      apparaissent donc en quelques heures ; ils s'affinent avec le suivi normal au fil des jours.</p>
     </details>
     <div id="liste"></div>
   </section>
 
   <section id="ventes" hidden>
-    <p class="aide">Dernières ventes détectées parmi les annonces suivies (la plus récente en premier).</p>
+    <p class="aide">Dernières ventes détectées (annonces suivies et rattrapage), la plus récente en premier.</p>
     <div class="grille" id="grille-ventes"></div>
   </section>
 
@@ -222,8 +224,8 @@ function afficherNiches() {
   let lignes = (S.segments[type] || []).filter((l) => !q || l.nom.toLowerCase().includes(q));
   lignes = [...lignes].sort((a, b) => (b[tri] ?? -1) - (a[tri] ?? -1));
   if (!lignes.length) {
-    $("#liste").innerHTML = `<div class="vide">Pas encore assez de données ici. Les premières niches apparaissent
-      après environ 24 h de relevé (il faut au moins ${S.reglages.n_min} annonces suivies par groupe).</div>`;
+    $("#liste").innerHTML = `<div class="vide">Pas encore assez de données ici : il faut au moins ${S.reglages.n_min}
+      annonces par groupe. Les premiers groupes apparaissent après quelques relevés.</div>`;
     return;
   }
   const max = Math.max(1, ...lignes.map((l) => l.score || 0));
@@ -257,17 +259,20 @@ function carte(a, vente) {
       <div class="p">${euros(prix)}</div>
       <div class="m">${esc([a.marque, a.taille, a.etat].filter(Boolean).join(" · "))}</div>
       <div class="m">${esc(a.categorie || "")}</div>
-      ${vente ? `<span class="badge">Vendu ${esc(delai(a.vendu_apres_h, a.vendu_avant_h))}</span>`
+      ${vente ? (a.rattrapage ? `<span class="badge">Vendu · mis en ligne ${esc(quand(a.vu_le))}</span>`
+                               : `<span class="badge">Vendu ${esc(delai(a.vendu_apres_h, a.vendu_avant_h))}</span>`)
               : `<span class="badge">${a.favoris} ♥ · ${esc(quand(a.vu_le))}</span>`}
     </div></a>`;
 }
 
 // ---------- état du relevé
 function afficherEtat() {
-  const r = S.resume, st = r.statuts || {};
+  const r = S.resume, st = r.statuts || {}, ra = r.rattrapage || {};
+  const raLues = Object.entries(ra).filter(([k]) => k !== "supprime").reduce((t, [, v]) => t + v, 0);
   $("#tuiles-etat").innerHTML = [
-    [r.annonces_vues, "annonces vues"], [r.suivies, "annonces suivies"], [st.vendu || 0, "ventes détectées"],
+    [r.annonces_vues, "annonces vues"], [r.suivies, "annonces suivies"], [st.vendu || 0, "ventes détectées (suivi)"],
     [st.en_vente || 0, "toujours en vente"], [st.supprime || 0, "supprimées"], [r.controles_en_retard, "contrôles en retard"],
+    [raLues, "anciennes annonces lues (rattrapage)"], [ra.vendu || 0, "dont vendues"], [ra.supprime || 0, "numéros absents"],
   ].map(([v, t]) => `<div class="tuile"><b>${v ?? 0}</b><span>${t}</span></div>`).join("");
   $("#table-releves").innerHTML = `<tr><th>Début</th><th>Durée</th><th>Vues</th><th>Nouvelles</th><th>Contrôles</th><th>Ventes</th><th>État</th></tr>` +
     S.releves.map((x) => `<tr><td>${new Date(x.debut * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>

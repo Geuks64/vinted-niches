@@ -11,6 +11,8 @@ et calcule quelles **catégories / marques / tranches de prix** se vendent le pl
    - lit les ~570 dernières annonces publiées (catalogue « plus récents » de vinted.fr) ;
    - en garde ~7 % au hasard pour les **suivre** : l'outil revient voir chaque annonce suivie
      après 6 h, 24 h, 3 j et 7 j pour savoir si elle est **vendue** (ou réservée, supprimée...).
+   - **rattrapage** : à chaque relevé, va aussi voir jusqu'à 120 annonces publiées il y a ~1 j, ~3 j
+     et ~7 j (au hasard) pour savoir tout de suite si elles sont vendues → premiers chiffres en quelques heures.
 2. `stats.py` calcule les statistiques (`site/stats.json`) :
    - % vendu en 24 h / 3 j / 7 j, délai médian de vente, prix de vente médian ;
    - par catégorie, marque, catégorie + marque, catégorie + tranche de prix ;
@@ -29,8 +31,8 @@ La base de données (SQLite) est gardée dans la Release **`donnees`** (fichier 
 
 ## Quand regarder
 
-- Après ~6 h : premières ventes détectées (onglet « Ventes en direct »).
-- Après ~24 h : premiers % de vente.
+- Après quelques relevés : premières ventes et premiers % de vente (grâce au rattrapage).
+- Après ~24 h : les % se précisent avec le suivi des nouvelles annonces.
 - Après ~7 jours : chiffres fiables pour choisir une niche.
 
 ## Réglages (variables `NICHES_*` dans `collecte.py` / `stats.py`)

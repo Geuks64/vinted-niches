@@ -35,6 +35,9 @@ TAUX_SUIVI = float(os.environ.get("NICHES_TAUX", "0.07"))    # part des nouvelle
 PAUSE = float(os.environ.get("NICHES_PAUSE", "4"))           # secondes entre deux requêtes
 DUREE_MAX = float(os.environ.get("NICHES_DUREE", "780"))     # durée max d'un relevé (s)
 CONTROLES_H = [6, 24, 72, 168]                               # quand revenir voir une annonce suivie
+RATTRAPAGE_MAX = int(os.environ.get("NICHES_RATTRAPAGE", "120"))  # anciennes annonces vues par relevé (max)
+RATTRAPAGE_AGES_H = [24, 72, 168]                            # âges visés : 1 j, 3 j, 7 j
+DEBIT_DEFAUT = 75.0                                          # numéros d'annonce créés par seconde (mesuré la nuit)
 
 DEBUT = time.time()
 
@@ -76,6 +79,17 @@ def ouvrir_base():
     CREATE TABLE IF NOT EXISTS offre_jour (
         jour TEXT, marque TEXT, n INTEGER, somme_prix REAL, PRIMARY KEY (jour, marque)
     );
+    -- Rattrapage : anciennes annonces (1 j, 3 j, 7 j) vues UNE fois pour savoir tout de suite
+    -- si elles sont vendues (sans attendre une semaine de suivi).
+    CREATE TABLE IF NOT EXISTS rattrapage (
+        id INTEGER PRIMARY KEY,
+        verifie_le INTEGER, age_vise_h INTEGER, age_h REAL,
+        statut TEXT,               -- en_vente / reserve / vendu / masque / supprime / inconnu
+        titre TEXT, marque TEXT, taille TEXT, etat TEXT, prix REAL,
+        categorie_id INTEGER, categorie TEXT, favoris INTEGER, miniature TEXT, url TEXT, brut TEXT
+    );
+    -- Repères numéro d'annonce <-> heure (pour estimer l'âge d'une annonce d'après son numéro)
+    CREATE TABLE IF NOT EXISTS reperes (ts INTEGER PRIMARY KEY, id INTEGER);
     CREATE TABLE IF NOT EXISTS releves (
         debut INTEGER, duree REAL, nouvelles INTEGER, vues INTEGER,
         controles INTEGER, ventes INTEGER, blocages INTEGER, note TEXT
@@ -170,7 +184,50 @@ def lire_annonce(html):
     m = re.search(r'"offers":\{[^{}]*?"price":\s*([\d.]+)', f)
     if m:
         prix = float(m.group(1))
-    return brut, " > ".join(t for t in chemin if t), prix
+    return brut, " > ".join(t for t in chemin if t), prix, details_annonce(f)
+
+
+def produit_jsonld(f):
+    """Objet JSON-LD « Product » de la page (nom, marque, image, état, prix)."""
+    dec = json.JSONDecoder()
+    for m in re.finditer(r'"@type":\s*"Product"', f):
+        # on remonte jusqu'à l'accolade qui ouvre l'objet
+        debut = m.start()
+        for _ in range(40):
+            debut = f.rfind("{", 0, debut)
+            if debut < 0:
+                break
+            try:
+                obj, _ = dec.raw_decode(f, debut)
+            except ValueError:
+                continue
+            if isinstance(obj, dict) and obj.get("@type") == "Product":
+                return obj
+    return {}
+
+
+def details_annonce(f):
+    """Titre, marque, taille, état, miniature lus sur la page d'une annonce."""
+    p = produit_jsonld(f)
+    marque = p.get("brand")
+    image = p.get("image")
+    d = {"titre": p.get("name"),
+         "marque": marque.get("name") if isinstance(marque, dict) else marque,
+         "miniature": image[0] if isinstance(image, list) and image else image,
+         "taille": None, "etat": None}
+    # Attributs affichés sur la page : [{"code": "brand", "data": {"value": ...}}, {"code": "size"...}]
+    for liste in objets_apres(f, "attributes"):
+        if isinstance(liste, list) and liste and isinstance(liste[0], dict) and "code" in liste[0]:
+            for a in liste:
+                code, val = str(a.get("code", "")), (a.get("data") or {}).get("value")
+                if "size" in code and not d["taille"]:
+                    d["taille"] = val
+                elif code in ("status", "condition") and not d["etat"]:
+                    d["etat"] = val
+                elif code == "brand" and not d["marque"]:
+                    d["marque"] = val
+            break
+    return d
 
 
 def statut_depuis(brut):
@@ -231,6 +288,9 @@ def nouvelles_annonces(v, con):
             continue
         cartes = lire_cartes(r.text)
         vues += len(cartes)
+        if page == 1 and cartes:
+            # repère numéro <-> heure (sert à estimer l'âge des annonces pour le rattrapage)
+            con.execute("INSERT OR REPLACE INTO reperes VALUES (?, ?)", (maintenant, max(c["id"] for c in cartes)))
         for c in cartes:
             suivi = 1 if random.random() < TAUX_SUIVI else 0
             cur = con.execute(
@@ -277,7 +337,7 @@ def controles(v, con):
                 con.execute("""UPDATE annonces SET statut='supprime', n_controles=?, prochain_controle=NULL,
                                dernier_controle=? WHERE id=?""", (n2, maintenant, iid))
             elif r.status_code == 200:
-                brut, categorie, prix = lire_annonce(r.text)
+                brut, categorie, prix, _ = lire_annonce(r.text)
                 # page sans aucun indicateur lisible -> « inconnu » (exclu des stats)
                 statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
                 cat_id = brut.get("catalog_id")
@@ -304,6 +364,89 @@ def controles(v, con):
     return faits, ventes
 
 
+def debit_ids(con):
+    """Numéros d'annonce créés par seconde, mesurés sur nos propres relevés."""
+    a = con.execute("SELECT ts, id FROM reperes ORDER BY ts LIMIT 1").fetchone()
+    b = con.execute("SELECT ts, id FROM reperes ORDER BY ts DESC LIMIT 1").fetchone()
+    if a and b and b[0] - a[0] >= 1800 and b[1] > a[1]:
+        return (b[1] - a[1]) / (b[0] - a[0])
+    return DEBIT_DEFAUT
+
+
+def id_vers_age(con, iid, maintenant):
+    """Âge approximatif (heures) d'une annonce d'après son numéro."""
+    # 1) entre deux repères connus : interpolation
+    av = con.execute("SELECT ts, id FROM reperes WHERE id <= ? ORDER BY id DESC LIMIT 1", (iid,)).fetchone()
+    ap = con.execute("SELECT ts, id FROM reperes WHERE id >= ? ORDER BY id LIMIT 1", (iid,)).fetchone()
+    if av and ap and ap[1] > av[1]:
+        ts = av[0] + (iid - av[1]) * (ap[0] - av[0]) / (ap[1] - av[1])
+        return (maintenant - ts) / 3600
+    # 2) sinon : à partir du plus ancien repère, avec le débit moyen
+    ref = av or ap or con.execute("SELECT ts, id FROM reperes ORDER BY ts LIMIT 1").fetchone()
+    ts = ref[0] - (ref[1] - iid) / debit_ids(con)
+    return (maintenant - ts) / 3600
+
+
+def id_pour_age(con, age_h, maintenant):
+    """Numéro d'annonce approximatif publiée il y a age_h heures."""
+    cible = maintenant - age_h * 3600
+    av = con.execute("SELECT ts, id FROM reperes WHERE ts <= ? ORDER BY ts DESC LIMIT 1", (cible,)).fetchone()
+    ap = con.execute("SELECT ts, id FROM reperes WHERE ts >= ? ORDER BY ts LIMIT 1", (cible,)).fetchone()
+    if av and ap and ap[0] > av[0]:
+        return int(av[1] + (cible - av[0]) * (ap[1] - av[1]) / (ap[0] - av[0]))
+    ref = ap or av
+    return int(ref[1] - (ref[0] - cible) * debit_ids(con))
+
+
+def rattrapage(v, con):
+    """Va voir des annonces publiées il y a ~1 j, ~3 j, ~7 j (numéros tirés au hasard)
+    et note tout de suite si elles sont vendues. Utilise le temps restant du relevé."""
+    if not con.execute("SELECT 1 FROM reperes LIMIT 1").fetchone():
+        return 0, 0
+    faits = ventes = absentes = erreurs = 0
+    montres = 0
+    while faits + absentes < RATTRAPAGE_MAX and not v.bloque() and temps_restant() > 30:
+        maintenant = int(time.time())
+        age_vise = RATTRAPAGE_AGES_H[(faits + absentes) % len(RATTRAPAGE_AGES_H)]
+        iid = id_pour_age(con, age_vise * random.uniform(0.85, 1.15), maintenant)
+        if con.execute("SELECT 1 FROM rattrapage WHERE id = ?", (iid,)).fetchone():
+            continue
+        r = v.get(f"/items/{iid}")
+        if r is None or r.status_code not in (200, 404, 410):
+            erreurs += 1
+            if erreurs >= 5:
+                break
+            continue
+        age_h = round(id_vers_age(con, iid, maintenant), 1)
+        if r.status_code != 200 or "/items/" not in str(r.url):
+            # numéro jamais publié (brouillon), annonce supprimée, ou autre pays : inutilisable
+            con.execute("INSERT OR IGNORE INTO rattrapage (id, verifie_le, age_vise_h, age_h, statut) "
+                        "VALUES (?,?,?,?, 'supprime')", (iid, maintenant, age_vise, age_h))
+            absentes += 1
+            continue
+        brut, categorie, prix, d = lire_annonce(r.text)
+        statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
+        cat_id = brut.get("catalog_id")
+        con.execute("""INSERT OR IGNORE INTO rattrapage (id, verifie_le, age_vise_h, age_h, statut, titre, marque,
+            taille, etat, prix, categorie_id, categorie, favoris, miniature, url, brut)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (iid, maintenant, age_vise, age_h, statut, d["titre"], d["marque"], d["taille"], d["etat"], prix,
+             int(cat_id) if str(cat_id or "").isdigit() else None, categorie or None,
+             brut.get("favourite_count"), d["miniature"], f"/items/{iid}", json.dumps(brut, ensure_ascii=False)))
+        faits += 1
+        ventes += statut == "vendu"
+        # Journal détaillé des premières pages lues (pour vérifier la détection des ventes)
+        if montres < 6 or (statut != "en_vente" and montres < 15):
+            montres += 1
+            log(f"  [{iid} ~{age_h:.0f} h] {statut} | {d['titre']} | {d['marque']} | {d['taille']} | {d['etat']} | "
+                f"{prix} € | {categorie} | {brut}")
+        if faits % 10 == 0:
+            con.commit()
+    con.commit()
+    log(f"Rattrapage : {faits} anciennes annonces lues ({ventes} vendues), {absentes} absentes")
+    return faits, ventes
+
+
 def compacter(con):
     """Résume puis efface les annonces non suivies de plus de 48 h (garde la base légère)."""
     limite = int(time.time()) - 48 * 3600
@@ -326,6 +469,8 @@ def main():
     vues, nouvelles = nouvelles_annonces(v, con)
     log(f"Nouvelles annonces : {nouvelles} (sur {vues} vues)")
     faits, ventes = controles(v, con)
+    r_faits, r_ventes = rattrapage(v, con)
+    faits, ventes = faits + r_faits, ventes + r_ventes
     note = "bloqué par Vinted" if v.bloque() else ""
     con.execute("INSERT INTO releves VALUES (?,?,?,?,?,?,?,?)",
                 (int(DEBUT), round(time.time() - DEBUT, 1), nouvelles, vues, faits, ventes, v.blocages, note))
