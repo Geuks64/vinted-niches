@@ -1,8 +1,14 @@
-# TEST manuel, lecture seule : suivi des annonces par les listes filtrées du catalogue (voir diag_catalogue.py).
+# DIAGNOSTICS manuels, lecture seule : diag_catalogue.py (listes filtrées) ou diag_prix.py (prix des annonces vendues).
 # Ne tourne jamais en même temps que la collecte d'un relevé. La base est lue, jamais modifiée ni publiée.
-name: Test catalogue filtré
+name: Diagnostic (lecture seule)
 on:
   workflow_dispatch:
+    inputs:
+      test:
+        description: "catalogue = listes filtrées ; prix = prix des annonces vendues"
+        type: choice
+        options: [prix, catalogue]
+        default: prix
 permissions:
   contents: read
   actions: read
@@ -24,4 +30,6 @@ jobs:
           gh release download donnees -p vinted.v2.gcm --clobber
           bash base.sh dechiffrer vinted.v2.gcm vinted.db
       - name: Test
-        run: python diag_catalogue.py
+        env:
+          TEST: ${{ inputs.test }}
+        run: python "diag_$TEST.py"
