@@ -13,6 +13,7 @@ quelques secondes, arrêt immédiat du relevé si Vinted répond « 403 / 429 »
 
 Base de données : SQLite (vinted.db), conservée entre deux relevés dans une Release GitHub.
 """
+from html import unescape
 import json
 import os
 import random
@@ -173,6 +174,9 @@ def lire_annonce(html):
         m = re.search(r'"' + cle + r'":\s*("[^"]*"|true|false|null|-?\d+(?:\.\d+)?)', f)
         if m:
             brut[cle] = json.loads(m.group(1))
+    for m in re.finditer(r'"([a-z_]*(?:sold|closed|closing|transaction)[a-z_]*)":\s*(true|false|"[^"]{0,40}"|\d+)', f):
+        if m.group(1) not in brut and len(brut) < 25:
+            brut[m.group(1)] = json.loads(m.group(2))
     # Fil d'Ariane : Femmes > Vêtements > Hauts et t-shirts > T-shirts
     chemin = []
     for b in objets_apres(f, "breadcrumbs"):
@@ -184,7 +188,22 @@ def lire_annonce(html):
     m = re.search(r'"offers":\{[^{}]*?"price":\s*([\d.]+)', f)
     if m:
         prix = float(m.group(1))
-    return brut, " > ".join(t for t in chemin if t), prix, details_annonce(f)
+    d = details_annonce(f)
+    if prix is None:
+        # bloc « faire une offre » : "price":{"amount":"26","currency_code":"EUR"}
+        m = re.search(r'"price":\{"amount":"([\d.]+)"', f)
+        if m:
+            prix = float(m.group(1))
+    if not d["titre"]:
+        m = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]*)"', html) or \
+            re.search(r'<title>([^<]*)</title>', html)
+        if m:
+            d["titre"] = unescape(m.group(1)).replace(" | Vinted", "").strip() or None
+    if not d["miniature"]:
+        m = re.search(r'<meta[^>]+property="og:image"[^>]+content="([^"]*)"', html)
+        if m:
+            d["miniature"] = unescape(m.group(1))
+    return brut, " > ".join(t for t in chemin if t), prix, d
 
 
 def produit_jsonld(f):
@@ -239,7 +258,9 @@ def statut_depuis(brut):
         return "reserve"
     if brut.get("is_hidden") is True:
         return "masque"
-    if brut.get("can_buy") is False and dispo and "instock" not in dispo:
+    # Constaté le 2026-11-08 : une annonce vendue a can_buy=false, instant_buy=false, n'est ni réservée
+    # ni masquée, et sa fiche produit JSON-LD (prix, disponibilité) a disparu de la page.
+    if brut.get("can_buy") is False and "instock" not in dispo:
         return "vendu"
     return "en_vente"
 
@@ -447,6 +468,33 @@ def rattrapage(v, con):
     return faits, ventes
 
 
+def reclasser(con):
+    """Réapplique statut_depuis() aux annonces déjà lues (utile quand la règle de détection change)."""
+    n = 0
+    for table in ("rattrapage", "annonces"):
+        nc = "n_controles" if table == "annonces" else "0"
+        for iid, statut, brut, n_ctrl in con.execute(
+                f"SELECT id, statut, brut, {nc} FROM {table} WHERE statut IN ('en_vente', 'vendu') "
+                "AND brut IS NOT NULL").fetchall():
+            b = json.loads(brut)
+            nouveau = statut_depuis(b) if ("can_buy" in b or "availability" in b) else statut
+            if nouveau != statut:
+                n += 1
+                if table == "rattrapage":
+                    con.execute("UPDATE rattrapage SET statut = ? WHERE id = ?", (nouveau, iid))
+                else:
+                    # vendue entre l'avant-dernier et le dernier contrôle
+                    avant = CONTROLES_H[max(0, n_ctrl - 1)] if nouveau == "vendu" else None
+                    apres = (CONTROLES_H[n_ctrl - 2] if n_ctrl >= 2 else 0) if nouveau == "vendu" else None
+                    con.execute("""UPDATE annonces SET statut = ?, prochain_controle = CASE WHEN ? = 'vendu' THEN NULL
+                        ELSE prochain_controle END, vendu_apres_h = ?, vendu_avant_h = ?,
+                        vendu_detecte = CASE WHEN ? = 'vendu' THEN COALESCE(vendu_detecte, dernier_controle) END
+                        WHERE id = ?""", (nouveau, nouveau, apres, avant, nouveau, iid))
+    con.commit()
+    if n:
+        log(f"Reclassement : {n} annonces changent de statut avec la règle actuelle")
+
+
 def compacter(con):
     """Résume puis efface les annonces non suivies de plus de 48 h (garde la base légère)."""
     limite = int(time.time()) - 48 * 3600
@@ -463,6 +511,7 @@ def compacter(con):
 
 def main():
     con = ouvrir_base()
+    reclasser(con)
     v = Vinted()
     r = v.get("/")
     log("Accueil :", r.status_code if r is not None else "erreur")

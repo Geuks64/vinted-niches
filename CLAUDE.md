@@ -21,9 +21,12 @@
   itemBox.secondLine = « taille · état », user.isBusiness, thumbnailUrl).
 - Page annonce `/items/ID` (~1,5 Mo) : `can_buy`, `is_reserved`, `is_hidden`, `favourite_count`,
   `catalog_id`, `breadcrumbs` (chemin de catégorie), JSON-LD `offers.availability` (`InStock` si en vente).
-- **Pas encore vu à quoi ressemble une annonce vendue** : `statut_depuis()` suppose `availability`
-  ≠ InStock (SoldOut/OutOfStock) ou `is_closed`. À vérifier dans l'onglet « Relevé » du tableau de bord
-  (tableau « Indicateurs lus sur les pages ») une fois les premiers contrôles faits.
+- **Annonce vendue (constaté le 2026-11-08 via le rattrapage)** : `can_buy=false`, `instant_buy=false`, ni
+  `is_reserved` ni `is_hidden`, et plus de fiche JSON-LD (pas d'`availability`, pas de prix ni de titre JSON-LD →
+  titre via `og:title`, prix via le bloc `"price":{"amount":...}`). `statut_depuis()` classe ce cas en « vendu ».
+  Hypothèse probable mais à confirmer (le mode vacances d'un vendeur pourrait donner la même chose) : les clés
+  contenant sold/closed/transaction sont maintenant gardées dans `brut` pour vérifier. `reclasser()` réapplique
+  la règle à toutes les lignes à chaque relevé.
 
 ## État en cours
 
