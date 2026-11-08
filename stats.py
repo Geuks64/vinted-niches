@@ -38,26 +38,57 @@ def mediane(v):
 TRANCHES_AGE = {"24h": (18, 48), "3j": (48, 120), "7j": (120, 260)}
 
 
+ETATS_VENDU = ("vendu", "vendu_probable")          # ventes : confirmées + probables (voir collecte.py)
+EXCLUS = ("supprime", "masque", "inconnu", "indisponible")   # jamais comptés comme vendus NI invendus
+N_FIABLE = 30   # en dessous : verdict « à confirmer »
+
+
+def est_vendu(a):
+    return a.get("statut") in ETATS_VENDU
+
+
+def wilson(k, n, z=1.96):
+    """Intervalle de confiance de Wilson à 95 % pour une proportion k/n -> (bas %, haut %)."""
+    if not n:
+        return None, None
+    p = k / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    marge = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / (1 + z * z / n)
+    return round(100 * max(0, centre - marge), 1), round(100 * min(1, centre + marge), 1)
+
+
+def confiance(n_elig, bas, haut):
+    """Note de confiance 0-100 : 100 = fourchette très étroite. Basée sur la largeur de l'intervalle de Wilson."""
+    if not n_elig or bas is None:
+        return 0
+    return max(0, min(100, round(100 - 2 * (haut - bas))))
+
+
 def segment_stats(lignes, maintenant, ratt=()):
-    """lignes : annonces suivies (dict) ; ratt : annonces du rattrapage. Renvoie les indicateurs du segment."""
-    utiles = [a for a in lignes if a["statut"] not in ("supprime", "masque", "inconnu") and a["n_controles"] > 0]
-    ratt = [a for a in ratt if a["statut"] in ("en_vente", "reserve", "vendu")]
-    res = {"n": len(utiles) + len(ratt), "n_rattrapage": len(ratt)}
-    vendues = [a for a in utiles if a["statut"] == "vendu"]
-    r_vendues = [a for a in ratt if a["statut"] == "vendu"]
+    """lignes : annonces suivies (dict) ; ratt : annonces du rattrapage. Renvoie les indicateurs du segment.
+    Les annonces supprimées / masquées / indisponibles / illisibles sont EXCLUES (ni vendues ni invendues)."""
+    utiles = [a for a in lignes if a["statut"] not in EXCLUS and a["n_controles"] > 0]
+    ratt = [a for a in ratt if a["statut"] in ("en_vente", "reserve") + ETATS_VENDU]
+    res = {"n": len(utiles) + len(ratt), "n_rattrapage": len(ratt),
+           "n_pro": sum(1 for a in utiles + ratt if a.get("pro") == 1)}
+    vendues = [a for a in utiles if est_vendu(a)]
+    r_vendues = [a for a in ratt if est_vendu(a)]
     res["vendues"] = len(vendues) + len(r_vendues)
+    res["vendues_confirmees"] = sum(1 for a in vendues + r_vendues if a["statut"] == "vendu")
     for nom, (h, idx) in FENETRES.items():
         # éligible = annonce vue il y a au moins h heures (même « âge » pour vendues et invendues,
         # sinon les ventes rapides gonfleraient le taux) dont on connaît l'état à h heures.
         elig = [a for a in utiles if a["vu_le"] <= maintenant - h * 3600 and
-                (a["n_controles"] > idx or a["statut"] == "vendu")]
-        ok = [a for a in elig if a["statut"] == "vendu" and (a["vendu_avant_h"] or 0) <= h * 1.25]
+                (a["n_controles"] > idx or est_vendu(a))]
+        ok = [a for a in elig if est_vendu(a) and (a["vendu_avant_h"] or 0) <= h * 1.25]
         lo, hi = TRANCHES_AGE[nom]
         r_elig = [a for a in ratt if lo <= (a["age_h"] or 0) < hi]
-        r_ok = [a for a in r_elig if a["statut"] == "vendu"]
+        r_ok = [a for a in r_elig if est_vendu(a)]
         n_elig, n_ok = len(elig) + len(r_elig), len(ok) + len(r_ok)
-        res["elig_" + nom] = n_elig
+        res["elig_" + nom] = n_elig          # nombre EXACT d'annonces utilisées pour ce taux
+        res["vendues_" + nom] = n_ok
         res["taux_" + nom] = round(100 * n_ok / n_elig, 1) if n_elig >= N_MIN else None
+        res["ic_" + nom] = wilson(n_ok, n_elig) if n_elig >= N_MIN else (None, None)
     res["delai_h"] = mediane([((a["vendu_apres_h"] or 0) + (a["vendu_avant_h"] or 0)) / 2 for a in vendues])
     res["prix_vendu"] = mediane([a["prix_final"] or a["prix"] for a in vendues] + [a["prix"] for a in r_vendues])
     res["prix"] = mediane([a["prix"] for a in utiles] + [a["prix"] for a in ratt])
@@ -72,6 +103,10 @@ def segment_stats(lignes, maintenant, ratt=()):
             break
     else:
         res["score"], res["fenetre"] = None, None
+    # Note de confiance (sur la fenêtre utilisée) + nombre d'annonces derrière le chiffre
+    f = res["fenetre"]
+    res["n_utilisees"] = res["elig_" + f] if f else 0
+    res["confiance"] = confiance(res["n_utilisees"], *res["ic_" + f]) if f else 0
     return res
 
 
@@ -153,7 +188,7 @@ def calculer_vue(suivies, ratt, maintenant, offre):
                 tous = g.get(cle, []) + gr.get(cle, [])
                 if nom in ("produit", "categorie_large", "marque"):
                     # annonces concernées (affichées sous la ligne du Top) : vendues d'abord, puis les plus aimées
-                    ex = sorted(tous, key=lambda a: (a["statut"] != "vendu", -(favoris_jour(a, maintenant) or 0)))
+                    ex = sorted(tous, key=lambda a: (not est_vendu(a), -(favoris_jour(a, maintenant) or 0)))
                     s["exemples"] = [carte(a, maintenant) for a in ex if a.get("miniature")][:8]
                 fj = [x for x in (favoris_jour(a, maintenant) for a in tous) if x is not None]
                 s["favoris_jour"] = round(sum(fj) / len(fj), 2) if fj else None
@@ -170,7 +205,9 @@ def calculer_vue(suivies, ratt, maintenant, offre):
     fj_tous = [x for x in (favoris_jour(a, maintenant) for a in tous) if x is not None]
     fav_moy = sum(fj_tous) / len(fj_tous) if fj_tous else 0
     ref = {"taux_24h": glob["taux_24h"], "taux_3j": glob["taux_3j"], "taux_7j": glob["taux_7j"],
-           "favoris_jour": round(fav_moy, 2), "n": glob["n"]}
+           "ic_7j": glob["ic_7j"], "elig_7j": glob["elig_7j"], "vendues_7j": glob["vendues_7j"],
+           "favoris_jour": round(fav_moy, 2), "n": glob["n"], "vendues": glob["vendues"],
+           "vendues_confirmees": glob["vendues_confirmees"]}
 
     # ---------- Top du moment : produits classés par un indice de demande (0-100)
     top = []
@@ -184,26 +221,36 @@ def calculer_vue(suivies, ratt, maintenant, offre):
                     break
             if t7 is None:
                 continue
-            k = 15   # prudence : un petit échantillon est ramené vers la moyenne
-            t7_p = (t7 * l["n"] + (ref["taux_7j"] or t7) * k) / (l["n"] + k)
             fav = l["favoris_jour"] if l["favoris_jour"] is not None else fav_moy
-            fav_p = (fav * l["n"] + fav_moy * k) / (l["n"] + k)
-            r_vente = t7_p / ref["taux_7j"] if ref["taux_7j"] else 1
-            r_fav = fav_p / fav_moy if fav_moy else 1
-            indice = round(min(100, 50 * (0.65 * r_vente + 0.35 * r_fav)), 1)
-            if r_vente >= 1.4 or (r_vente >= 1.1 and r_fav >= 1.5):
+            r_vente = t7 / ref["taux_7j"] if ref["taux_7j"] else 1
+            r_fav = fav / fav_moy if fav_moy else 1
+            # Indice brut (0-100, 50 = moyenne), puis ramené vers 50 selon la confiance :
+            #   indice = 50 + r × (brut − 50), r = confiance / 100 (petit échantillon -> proche de 50)
+            r = l["confiance"] / 100
+            brut = min(100.0, 50 * (0.65 * min(r_vente, 3) + 0.35 * min(r_fav, 3)))
+            indice = round(50 + r * (brut - 50), 1)
+            rv = 1 + r * (r_vente - 1)            # ratios « prudents » pour le verdict
+            rf = 1 + r * (r_fav - 1)
+            if l["n_utilisees"] < N_FIABLE:
+                verdict = "a_confirmer"
+            elif rv >= 1.4 or (rv >= 1.1 and rf >= 1.5):
                 verdict = "tres_demande"
-            elif r_vente >= 1.0:
+            elif rv >= 1.0:
                 verdict = "bien"
-            elif r_vente <= 0.6 and r_fav <= 1:
+            elif rv <= 0.6 and rf <= 1:
                 verdict = "eviter"
             else:
                 verdict = "moyen"
+            f = l["fenetre"]
             top.append({"nom": l["nom"], "type": nom_seg, "indice": indice, "verdict": verdict,
                         "exemples": l.get("exemples", []),
                         "taux_7j_estime": round(t7, 1), "favoris_jour": l["favoris_jour"],
                         "part_demande": l["part_demande"], "prix_vendu": l["prix_vendu"], "prix": l["prix"],
                         "delai_h": l["delai_h"], "n": l["n"], "vendues": l["vendues"],
+                        "vendues_confirmees": l["vendues_confirmees"],
+                        "fenetre": f, "taux_fenetre": l["taux_" + f], "ic": l["ic_" + f],
+                        "n_utilisees": l["n_utilisees"], "confiance": l["confiance"],
+                        "part_pro": round(100 * l["n_pro"] / l["n"], 1) if l["n"] else None,
                         "offre_7j": l.get("offre_7j")})
     top.sort(key=lambda x: -x["indice"])
 
@@ -213,9 +260,9 @@ def calculer_vue(suivies, ratt, maintenant, offre):
     aimees = sorted(recentes, key=lambda a: -favoris_jour(a, maintenant))[:60]
 
     # ---------- flux des ventes
-    ventes = [a for a in suivies if a["statut"] == "vendu"]
+    ventes = [a for a in suivies if est_vendu(a)]
     for a in ratt:
-        if a["statut"] == "vendu":
+        if est_vendu(a):
             # vendue à un moment inconnu avant age_h : on l'affiche « vendue, publiée il y a ~X »
             ventes.append({**a, "vendu_detecte": a["verifie_le"], "vu_le": a["verifie_le"] - int((a["age_h"] or 0) * 3600),
                            "vendu_apres_h": None, "vendu_avant_h": None, "rattrapage": 1, "pro": None, "prix_final": None})
@@ -248,6 +295,9 @@ def main():
 
     # ---------- deux vues : toute l'Europe, et France seulement (vendeurs français)
     vue_tous = calculer_vue(suivies, ratt, maintenant, offre)
+    # particuliers seulement : vendeur pro connu et = 0 (les annonces dont on ignore le type sont écartées)
+    vue_part = calculer_vue([a for a in suivies if a.get("pro") == 0], [a for a in ratt if a.get("pro") == 0],
+                            maintenant, offre)
     vue_fr = calculer_vue([a for a in suivies if pays_de(a) == "FR"],
                           [a for a in ratt if pays_de(a) == "FR"], maintenant, offre)
     pays = defaultdict(int)
@@ -290,7 +340,7 @@ def main():
                    "rattrapage": dict(con.execute("SELECT statut, COUNT(*) FROM rattrapage GROUP BY 1").fetchall()),
                    "statuts": statuts, "controles_en_retard": en_retard,
                    "pays": dict(sorted(pays.items(), key=lambda x: -x[1])[:12])},
-        "vues": {"tous": vue_tous, "fr": vue_fr},
+        "vues": {"tous": vue_tous, "fr": vue_fr, "part": vue_part},
         "recherches": recherches,
         "releves": releves,
         "indicateurs_bruts": sorted(([k, v] for k, v in combos.items()), key=lambda x: -x[1])[:15],

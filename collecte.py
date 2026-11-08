@@ -96,6 +96,15 @@ def ouvrir_base():
         controles INTEGER, ventes INTEGER, blocages INTEGER, note TEXT
     );
     """)
+    con.executescript("""
+    CREATE TABLE IF NOT EXISTS observations (
+        num INTEGER PRIMARY KEY AUTOINCREMENT,
+        annonce_id INTEGER, source TEXT,  -- source : suivi / confirmation / rattrapage / migration-...
+        ts INTEGER, http INTEGER, statut TEXT, age_h REAL,
+        favoris INTEGER, prix REAL, devise TEXT, brut TEXT
+    );
+    CREATE INDEX IF NOT EXISTS i_obs ON observations(annonce_id, ts);
+    """)
     cols_annonces = [c[1] for c in con.execute("PRAGMA table_info(annonces)")]
     if "badge" not in cols_annonces:
         con.execute("ALTER TABLE annonces ADD COLUMN badge TEXT")
@@ -107,7 +116,51 @@ def ouvrir_base():
         con.execute("ALTER TABLE rattrapage ADD COLUMN devise TEXT")
         con.execute("UPDATE rattrapage SET prix = NULL")
         con.commit()
+    migrer(con)
     return con
+
+
+VERSION_SCHEMA = 2
+
+
+def migrer(con):
+    """Migrations versionnées (PRAGMA user_version). Ne supprime jamais de données."""
+    version = con.execute("PRAGMA user_version").fetchone()[0]
+    if version >= VERSION_SCHEMA:
+        return
+    if version < 2:
+        # Lot 1 : vendeur pro sur le rattrapage, contrôle de confirmation, états de vente distincts, historique
+        if "pro" not in [c[1] for c in con.execute("PRAGMA table_info(rattrapage)")]:
+            con.execute("ALTER TABLE rattrapage ADD COLUMN pro INTEGER")
+        if "confirmation" not in [c[1] for c in con.execute("PRAGMA table_info(annonces)")]:
+            con.execute("ALTER TABLE annonces ADD COLUMN confirmation INTEGER DEFAULT 0")
+        # « vendu » d'avant = déduit d'une seule lecture -> « vendu_probable » (sauf signal explicite)
+        for table in ("rattrapage", "annonces"):
+            for iid, brut in con.execute(f"SELECT id, brut FROM {table} WHERE statut = 'vendu'").fetchall():
+                b = json.loads(brut) if brut else {}
+                if statut_depuis(b) != "vendu":
+                    con.execute(f"UPDATE {table} SET statut = 'vendu_probable' WHERE id = ?", (iid,))
+        # annonces suivies déjà détectées vendues : contrôle de confirmation à faire
+        con.execute("""UPDATE annonces SET confirmation = 1,
+                       prochain_controle = MAX(COALESCE(vendu_detecte, 0) + 12 * 3600, CAST(strftime('%s','now') AS INTEGER))
+                       WHERE statut = 'vendu_probable' AND suivi = 1""")
+        # historique : une observation par lecture déjà faite (on n'avait gardé que la dernière)
+        if not con.execute("SELECT 1 FROM observations LIMIT 1").fetchone():
+            con.execute("""INSERT INTO observations (annonce_id, source, ts, http, statut, age_h, favoris, prix, devise, brut)
+                SELECT id, 'migration-rattrapage', verifie_le, CASE WHEN statut = 'supprime' THEN 404 ELSE 200 END,
+                       statut, age_h, favoris, prix, devise, brut FROM rattrapage""")
+            con.execute("""INSERT INTO observations (annonce_id, source, ts, http, statut, age_h, favoris, prix, devise, brut)
+                SELECT id, 'migration-suivi', dernier_controle, CASE WHEN statut = 'supprime' THEN 404 ELSE 200 END,
+                       statut, (dernier_controle - vu_le) / 3600.0, favoris, prix_final, devise, brut
+                FROM annonces WHERE n_controles > 0""")
+        # vendeur pro du rattrapage d'après les indicateurs déjà lus (« business »), si présents
+        for iid, brut in con.execute("SELECT id, brut FROM rattrapage WHERE brut LIKE '%business%'").fetchall():
+            b = json.loads(brut)
+            if isinstance(b.get("business"), bool):
+                con.execute("UPDATE rattrapage SET pro = ? WHERE id = ?", (int(b["business"]), iid))
+    con.execute(f"PRAGMA user_version = {VERSION_SCHEMA}")
+    con.commit()
+    log(f"Migration de la base : version {version} -> {VERSION_SCHEMA}")
 
 
 # ---------------------------------------------------------------- lecture des pages Vinted
@@ -194,7 +247,7 @@ def lire_annonce(html):
     f = flux_next(html)
     brut = {}
     for cle in ["can_buy", "instant_buy", "is_hidden", "is_reserved", "is_closed", "is_sold",
-                "favourite_count", "catalog_id", "availability", "item_closing_action"]:
+                "favourite_count", "catalog_id", "availability", "item_closing_action", "business"]:
         m = re.search(r'"' + cle + r'":\s*("[^"]*"|true|false|null|-?\d+(?:\.\d+)?)', f)
         if m:
             brut[cle] = json.loads(m.group(1))
@@ -297,8 +350,20 @@ def details_annonce(f):
     return d
 
 
+# États possibles d'une annonce (colonne « statut ») :
+#   en_vente       achetable
+#   reserve        réservée pour un acheteur
+#   masque         masquée par le vendeur
+#   indisponible   pas achetable mais fiche produit encore « en stock » (ex. vendeur en vacances) : PAS une vente
+#   vendu_probable plus achetable, ni réservée ni masquée, fiche produit disparue (signature d'une vente, 1 observation)
+#   vendu          vente confirmée : signal explicite (is_sold / SoldOut) ou signature de vente revue 2 fois à 12 h d'écart
+#   supprime       page introuvable (404) ou redirigée : on ne sait pas si elle a été vendue -> exclue des stats
+#   inconnu        page sans indicateur lisible -> exclue des stats
+ETATS_VENDU = ("vendu", "vendu_probable")
+
+
 def statut_depuis(brut):
-    """Déduit le statut à partir des indicateurs de la page."""
+    """Déduit l'état à partir des indicateurs d'UNE lecture de la page (voir ETATS ci-dessus)."""
     dispo = str(brut.get("availability", "")).lower()
     if brut.get("is_closed") is True or brut.get("is_sold") is True or "sold" in dispo or "outofstock" in dispo:
         return "vendu"
@@ -308,9 +373,18 @@ def statut_depuis(brut):
         return "masque"
     # Constaté le 2026-11-08 : une annonce vendue a can_buy=false, instant_buy=false, n'est ni réservée
     # ni masquée, et sa fiche produit JSON-LD (prix, disponibilité) a disparu de la page.
-    if brut.get("can_buy") is False and "instock" not in dispo:
-        return "vendu"
+    if brut.get("can_buy") is False:
+        return "indisponible" if "instock" in dispo else "vendu_probable"
     return "en_vente"
+
+
+def observer(con, annonce_id, source, http, statut=None, age_h=None, brut=None, favoris=None, prix=None, devise=None):
+    """Historique : chaque lecture d'une annonce est gardée (jamais écrasée)."""
+    con.execute("""INSERT INTO observations (annonce_id, source, ts, http, statut, age_h, favoris, prix, devise, brut)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (annonce_id, source, int(time.time()), http, statut,
+                 round(age_h, 2) if age_h is not None else None, favoris, prix, devise,
+                 json.dumps(brut, ensure_ascii=False) if isinstance(brut, dict) else brut))
 
 
 class Vinted:
@@ -377,61 +451,90 @@ def nouvelles_annonces(v, con):
 
 
 def controles(v, con):
-    """Revient voir les annonces suivies dont c'est l'heure."""
+    """Revient voir les annonces suivies dont c'est l'heure.
+    - contrôles normaux à 6 h, 24 h, 3 j, 7 j (n_controles = nombre de contrôles normaux faits)
+    - contrôle de CONFIRMATION 12 h après une vente probable (ne compte pas dans n_controles) :
+      encore « vendue » -> vente confirmée ; de nouveau en vente -> on annule la vente et le suivi reprend."""
     faits = ventes = 0
     while not v.bloque() and temps_restant() > 30:
         maintenant = int(time.time())
         lot = con.execute(
-            """SELECT id, vu_le, n_controles, url, statut FROM annonces
+            """SELECT id, vu_le, n_controles, url, statut, COALESCE(confirmation, 0) FROM annonces
                WHERE prochain_controle IS NOT NULL AND prochain_controle <= ?
                ORDER BY prochain_controle LIMIT 20""", (maintenant,)).fetchall()
         if not lot:
             break
-        for iid, vu_le, n, url, ancien in lot:
+        for iid, vu_le, n, url, ancien, a_confirmer in lot:
             if v.bloque() or temps_restant() < 30:
                 break
+            source = "confirmation" if a_confirmer else "suivi"
             r = v.get(url or f"/items/{iid}")
-            if r is None or r.status_code not in (200, 404, 410):
-                # erreur réseau / 403 / 429 / 500 : on reporte ce contrôle de 30 min
-                con.execute("UPDATE annonces SET prochain_controle = ? WHERE id = ?",
-                            (int(time.time()) + 1800, iid))
-                continue
             maintenant = int(time.time())
             age_h = (maintenant - vu_le) / 3600
+            if r is None or r.status_code not in (200, 404, 410):
+                # erreur réseau / 403 / 429 / 500 : gardée dans l'historique, contrôle reporté de 30 min
+                observer(con, iid, source, r.status_code if r is not None else 0, "erreur", age_h)
+                con.execute("UPDATE annonces SET prochain_controle = ? WHERE id = ?", (maintenant + 1800, iid))
+                continue
+            redirige = "/items/" not in str(getattr(r, "url", "") or "/items/")
+            if r.status_code in (404, 410) or redirige:   # supprimée (ou redirigée ailleurs)
+                observer(con, iid, source, r.status_code, "supprime", age_h)
+                if a_confirmer:
+                    # supprimée après une vente probable (fréquent) : la vente reste « probable », suivi terminé
+                    con.execute("UPDATE annonces SET confirmation = 0, prochain_controle = NULL WHERE id = ?", (iid,))
+                else:
+                    con.execute("""UPDATE annonces SET statut='supprime', n_controles=?, prochain_controle=NULL,
+                                   dernier_controle=? WHERE id=?""", (n + 1, maintenant, iid))
+                faits += 1
+                continue
+            brut, categorie, _, d = lire_annonce(r.text)
+            prix = d["prix_eur"]
+            # page sans aucun indicateur lisible -> « inconnu » (exclu des stats)
+            statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
+            observer(con, iid, source, r.status_code, statut, age_h, brut, brut.get("favourite_count"), prix, d["devise"])
+            cat_id = brut.get("catalog_id")
+            commun = {"id": iid, "t": maintenant, "cat_id": int(cat_id) if str(cat_id or "").isdigit() else None,
+                      "cat": categorie or None, "fav": brut.get("favourite_count"),
+                      "brut": json.dumps(brut, ensure_ascii=False)}
+            maj_commune = """dernier_controle=:t, categorie_id=COALESCE(:cat_id, categorie_id),
+                             categorie=COALESCE(:cat, categorie), favoris=:fav, brut=:brut"""
+            if a_confirmer:
+                if statut in ETATS_VENDU:
+                    # vue « vendue » 2 fois : vente confirmée
+                    con.execute(f"""UPDATE annonces SET statut='vendu', confirmation=0, prochain_controle=NULL,
+                                    {maj_commune} WHERE id=:id""", commun)
+                elif statut in ("en_vente", "reserve", "indisponible"):
+                    # de nouveau en vente (ou indisponible) : ce n'était pas une vente -> on annule et le suivi reprend
+                    prochain = vu_le + CONTROLES_H[n] * 3600 if n < len(CONTROLES_H) else None
+                    con.execute(f"""UPDATE annonces SET statut=:statut, confirmation=0, prochain_controle=:prochain,
+                                    vendu_apres_h=NULL, vendu_avant_h=NULL, vendu_detecte=NULL, {maj_commune}
+                                    WHERE id=:id""", {**commun, "statut": statut, "prochain": prochain})
+                    log(f"  vente annulée (annonce {iid} de nouveau « {statut} »)")
+                else:   # masquée / inconnu : on ne conclut pas, la vente reste probable
+                    con.execute("UPDATE annonces SET confirmation=0, prochain_controle=NULL WHERE id=?", (iid,))
+                faits += 1
+                continue
             h_prec = CONTROLES_H[n - 1] if n > 0 else 0
             h_now = CONTROLES_H[min(n, len(CONTROLES_H) - 1)]
             n2 = n + 1
             prochain = vu_le + CONTROLES_H[n2] * 3600 if n2 < len(CONTROLES_H) else None
-            redirige = "/items/" not in str(getattr(r, "url", "") or "/items/")
-            if r.status_code in (404, 410) or redirige:   # supprimée (ou redirigée ailleurs)
-                con.execute("""UPDATE annonces SET statut='supprime', n_controles=?, prochain_controle=NULL,
-                               dernier_controle=? WHERE id=?""", (n2, maintenant, iid))
-            elif r.status_code == 200:
-                brut, categorie, _, d = lire_annonce(r.text)
-                prix = d["prix_eur"]
-                # page sans aucun indicateur lisible -> « inconnu » (exclu des stats)
-                statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
-                cat_id = brut.get("catalog_id")
-                valeurs = {"id": iid, "n": n2, "t": maintenant, "statut": statut,
-                           "cat_id": int(cat_id) if str(cat_id or "").isdigit() else None,
-                           "cat": categorie or None, "fav": brut.get("favourite_count"),
-                           "prix": prix, "brut": json.dumps(brut, ensure_ascii=False),
-                           "prochain": prochain}
-                if statut == "vendu":
-                    ventes += 1
-                    valeurs.update(prochain=None, apres=h_prec, avant=max(h_now, int(age_h)))
-                    con.execute("""UPDATE annonces SET statut=:statut, n_controles=:n, dernier_controle=:t,
-                        prochain_controle=:prochain, categorie_id=COALESCE(:cat_id, categorie_id),
-                        categorie=COALESCE(:cat, categorie), favoris=:fav, prix_final=:prix, brut=:brut,
-                        vendu_apres_h=:apres, vendu_avant_h=:avant, vendu_detecte=:t WHERE id=:id""", valeurs)
-                else:
-                    con.execute("""UPDATE annonces SET statut=:statut, n_controles=:n, dernier_controle=:t,
-                        prochain_controle=:prochain, categorie_id=COALESCE(:cat_id, categorie_id),
-                        categorie=COALESCE(:cat, categorie), favoris=:fav, prix_final=:prix, brut=:brut
-                        WHERE id=:id""", valeurs)
+            if statut in ETATS_VENDU:
+                ventes += 1
+                # vendue entre le contrôle précédent et celui-ci ; « vendu_probable » -> confirmation dans 12 h
+                confirmer = statut == "vendu_probable"
+                con.execute(f"""UPDATE annonces SET statut=:statut, n_controles=:n, prochain_controle=:prochain,
+                    confirmation=:conf, prix_final=:prix, vendu_apres_h=:apres, vendu_avant_h=:avant,
+                    vendu_detecte=:t, {maj_commune} WHERE id=:id""",
+                    {**commun, "statut": statut, "n": n2, "prix": prix, "apres": h_prec,
+                     "avant": max(h_now, int(age_h)), "conf": int(confirmer),
+                     "prochain": maintenant + 12 * 3600 if confirmer else None})
+            else:
+                con.execute(f"""UPDATE annonces SET statut=:statut, n_controles=:n, prochain_controle=:prochain,
+                    prix_final=:prix, {maj_commune} WHERE id=:id""",
+                    {**commun, "statut": statut, "n": n2, "prix": prix, "prochain": prochain})
             faits += 1
         con.commit()
-    log(f"Contrôles : {faits} annonces revues, {ventes} ventes détectées")
+    log(f"Contrôles : {faits} annonces revues, {ventes} ventes (probables ou confirmées) détectées")
     return faits, ventes
 
 
@@ -493,6 +596,7 @@ def rattrapage(v, con):
             # numéro jamais publié (brouillon), annonce supprimée, ou autre pays : inutilisable
             con.execute("INSERT OR IGNORE INTO rattrapage (id, verifie_le, age_vise_h, age_h, statut) "
                         "VALUES (?,?,?,?, 'supprime')", (iid, maintenant, age_vise, age_h))
+            observer(con, iid, "rattrapage", r.status_code, "supprime", age_h)
             absentes += 1
             continue
         brut, categorie, prix, d = lire_annonce(r.text)
@@ -504,14 +608,16 @@ def rattrapage(v, con):
         statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
         cat_id = brut.get("catalog_id")
         con.execute("""INSERT OR IGNORE INTO rattrapage (id, verifie_le, age_vise_h, age_h, statut, titre, marque,
-            taille, etat, prix, categorie_id, categorie, favoris, miniature, url, brut, devise)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            taille, etat, prix, categorie_id, categorie, favoris, miniature, url, brut, devise, pro)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (iid, maintenant, age_vise, age_h, statut, d["titre"], d["marque"], d["taille"], d["etat"], d["prix_eur"],
              int(cat_id) if str(cat_id or "").isdigit() else None, categorie or None,
              brut.get("favourite_count"), d["miniature"], f"/items/{iid}", json.dumps(brut, ensure_ascii=False),
-             d["devise"]))
+             d["devise"], int(brut["business"]) if isinstance(brut.get("business"), bool) else None))
+        observer(con, iid, "rattrapage", r.status_code, statut, age_h, brut, brut.get("favourite_count"),
+                 d["prix_eur"], d["devise"])
         faits += 1
-        ventes += statut == "vendu"
+        ventes += statut in ETATS_VENDU
         # Journal détaillé des premières pages lues (pour vérifier la détection des ventes)
         if montres < 6 or (statut != "en_vente" and montres < 15):
             montres += 1
@@ -520,7 +626,7 @@ def rattrapage(v, con):
         if faits % 10 == 0:
             con.commit()
     con.commit()
-    log(f"Rattrapage : {faits} anciennes annonces lues ({ventes} vendues), {absentes} absentes")
+    log(f"Rattrapage : {faits} anciennes annonces lues ({ventes} vendues probables), {absentes} absentes")
     return faits, ventes
 
 
@@ -555,30 +661,36 @@ def suivre_recherches(con):
 
 
 def reclasser(con):
-    """Réapplique statut_depuis() aux annonces déjà lues (utile quand la règle de détection change)."""
+    """Réapplique statut_depuis() aux lectures déjà faites quand la règle de détection change.
+    Ne touche pas aux ventes confirmées (« vendu ») ni aux annonces en attente de confirmation."""
     n = 0
-    for table in ("rattrapage", "annonces"):
-        nc = "n_controles" if table == "annonces" else "0"
-        for iid, statut, brut, n_ctrl in con.execute(
-                f"SELECT id, statut, brut, {nc} FROM {table} WHERE statut IN ('en_vente', 'vendu') "
-                "AND brut IS NOT NULL").fetchall():
-            b = json.loads(brut)
-            nouveau = statut_depuis(b) if ("can_buy" in b or "availability" in b) else statut
-            if nouveau != statut:
-                n += 1
-                if table == "rattrapage":
-                    con.execute("UPDATE rattrapage SET statut = ? WHERE id = ?", (nouveau, iid))
-                else:
-                    # vendue entre l'avant-dernier et le dernier contrôle
-                    avant = CONTROLES_H[max(0, n_ctrl - 1)] if nouveau == "vendu" else None
-                    apres = (CONTROLES_H[n_ctrl - 2] if n_ctrl >= 2 else 0) if nouveau == "vendu" else None
-                    con.execute("""UPDATE annonces SET statut = ?, prochain_controle = CASE WHEN ? = 'vendu' THEN NULL
-                        ELSE prochain_controle END, vendu_apres_h = ?, vendu_avant_h = ?,
-                        vendu_detecte = CASE WHEN ? = 'vendu' THEN COALESCE(vendu_detecte, dernier_controle) END
-                        WHERE id = ?""", (nouveau, nouveau, apres, avant, nouveau, iid))
+    for iid, statut, brut in con.execute(
+            "SELECT id, statut, brut FROM rattrapage WHERE statut IN ('en_vente', 'vendu_probable', 'indisponible') "
+            "AND brut IS NOT NULL").fetchall():
+        b = json.loads(brut)
+        nouveau = statut_depuis(b) if ("can_buy" in b or "availability" in b) else statut
+        if nouveau != statut:
+            con.execute("UPDATE rattrapage SET statut = ? WHERE id = ?", (nouveau, iid))
+            n += 1
+    for iid, statut, brut, n_ctrl in con.execute(
+            "SELECT id, statut, brut, n_controles FROM annonces WHERE statut IN ('en_vente', 'indisponible') "
+            "AND COALESCE(confirmation, 0) = 0 AND brut IS NOT NULL").fetchall():
+        b = json.loads(brut)
+        nouveau = statut_depuis(b) if ("can_buy" in b or "availability" in b) else statut
+        if nouveau != statut and nouveau in ETATS_VENDU + ("en_vente", "indisponible"):
+            n += 1
+            if nouveau in ETATS_VENDU:
+                # vendue entre l'avant-dernier et le dernier contrôle ; confirmation dans 12 h
+                con.execute("""UPDATE annonces SET statut = ?, confirmation = 1,
+                    prochain_controle = CAST(strftime('%s','now') AS INTEGER) + 12 * 3600,
+                    vendu_apres_h = ?, vendu_avant_h = ?, vendu_detecte = COALESCE(vendu_detecte, dernier_controle)
+                    WHERE id = ?""", (nouveau, CONTROLES_H[n_ctrl - 2] if n_ctrl >= 2 else 0,
+                                      CONTROLES_H[max(0, n_ctrl - 1)], iid))
+            else:
+                con.execute("UPDATE annonces SET statut = ? WHERE id = ?", (nouveau, iid))
     con.commit()
     if n:
-        log(f"Reclassement : {n} annonces changent de statut avec la règle actuelle")
+        log(f"Reclassement : {n} annonces changent d'état avec la règle actuelle")
 
 
 def compacter(con):

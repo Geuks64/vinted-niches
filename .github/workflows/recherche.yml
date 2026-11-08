@@ -36,9 +36,16 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install -q curl_cffi
 
-      - name: Récupérer la base (lecture seule)
+      - name: Récupérer la base (lecture seule, chiffrée)
+        env:
+          NICHES_CLE: ${{ secrets.NICHES_CLE }}
         run: |
-          if gh release download donnees -p vinted.db.gz --clobber 2>/dev/null; then gunzip -f vinted.db.gz; fi
+          # facultatif : sans base, la recherche marche quand même (sans l'historique des ventes)
+          if gh release download donnees -p vinted.db.gz.enc --clobber 2>/dev/null; then
+            bash base.sh dechiffrer vinted.db.gz.enc vinted.db || echo "Base illisible : recherche sans historique."
+          elif gh release download donnees -p vinted.db.gz --clobber 2>/dev/null; then
+            gunzip -f vinted.db.gz
+          fi
 
       - name: Analyse
         run: python recherche.py

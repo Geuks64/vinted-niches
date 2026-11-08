@@ -1,5 +1,10 @@
 vinted.db
 vinted.db.gz
+vinted.db.gz.enc
+*.db.gz.enc
+*.db
+*.db.tmp
 sauvegarde.db.gz
 site/stats.json
 __pycache__/
+commentaire.md

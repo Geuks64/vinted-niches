@@ -31,16 +31,27 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install -q curl_cffi
 
-      - name: Récupérer la base
+      - name: Récupérer la base (chiffrée)
+        env:
+          NICHES_CLE: ${{ secrets.NICHES_CLE }}
         run: |
-          if gh release view donnees --json assets --jq '.assets[].name' 2>/dev/null | grep -qx vinted.db.gz; then
+          # Sans clé : on s'arrête AVANT de relever (rien ne pourrait être sauvegardé, rien n'est publié en clair)
+          bash base.sh cle_presente
+          actifs=$(gh release view donnees --json assets --jq '.assets[].name' 2>/dev/null || true)
+          if echo "$actifs" | grep -qx vinted.db.gz.enc; then
             # La base existe : on DOIT la récupérer (sinon on écraserait l'historique par une base vide)
+            gh release download donnees -p vinted.db.gz.enc --clobber
+            bash base.sh dechiffrer vinted.db.gz.enc vinted.db
+          elif echo "$actifs" | grep -qx vinted.db.gz; then
+            echo "Ancienne base non chiffrée trouvée : elle sera chiffrée à la fin de ce relevé."
             gh release download donnees -p vinted.db.gz --clobber
             gunzip -f vinted.db.gz
-            ls -lh vinted.db
+            bash base.sh verifier vinted.db
           else
             echo "Première exécution : base vide"
           fi
+          # copie de la base AVANT ce relevé (sauvegarde « precedente » publiée chiffrée à la fin)
+          if [ -f vinted.db ]; then cp vinted.db avant.db; fi
 
       - name: Relevé
         id: collecte
@@ -50,16 +61,40 @@ jobs:
       - name: Statistiques
         run: python stats.py
 
-      - name: Sauvegarder la base
+      - name: Sauvegarder la base (chiffrée)
+        env:
+          NICHES_CLE: ${{ secrets.NICHES_CLE }}
         run: |
-          gzip -kf vinted.db
+          bash base.sh verifier vinted.db
+          bash base.sh chiffrer vinted.db vinted.db.gz.enc
+          # Contrôle avant publication : la copie chiffrée doit redonner exactement la même base
+          bash base.sh dechiffrer vinted.db.gz.enc controle.db
+          cmp vinted.db controle.db && echo "Copie chiffrée vérifiée (identique à la base)."
           gh release view donnees >/dev/null 2>&1 || \
-            gh release create donnees --title "Données du relevé" --notes "Base SQLite mise à jour automatiquement par le workflow « Relevé Vinted ». Ne pas supprimer."
-          gh release upload donnees vinted.db.gz --clobber
-          # Sauvegarde de secours une fois par jour (vers 3 h UTC)
-          if [ "$(date -u +%H)" = "03" ]; then
-            cp vinted.db.gz sauvegarde.db.gz && gh release upload donnees sauvegarde.db.gz --clobber
+            gh release create donnees --title "Données du relevé" --notes "Base SQLite CHIFFRÉE (clé : secret NICHES_CLE), mise à jour automatiquement par le workflow « Relevé Vinted ». Ne pas supprimer."
+          # Sauvegarde de la base telle qu'elle était avant ce relevé
+          if [ -f avant.db ]; then
+            bash base.sh chiffrer avant.db precedente.db.gz.enc
+            gh release upload donnees precedente.db.gz.enc --clobber
+            # copie permanente de la base d'avant la migration « lot 1 » (une seule fois)
+            if [ "$(python3 -c "import sqlite3; print(sqlite3.connect('avant.db').execute('PRAGMA user_version').fetchone()[0])")" -lt 2 ]; then
+              cp precedente.db.gz.enc avant-lot1.db.gz.enc && gh release upload donnees avant-lot1.db.gz.enc --clobber
+            fi
           fi
+          gh release upload donnees vinted.db.gz.enc --clobber
+          # Sauvegarde datée une fois par jour (vers 3 h UTC), on garde les 14 dernières
+          if [ "$(date -u +%H)" = "03" ]; then
+            cp vinted.db.gz.enc "sauvegarde-$(date -u +%F).db.gz.enc"
+            gh release upload donnees "sauvegarde-$(date -u +%F).db.gz.enc" --clobber
+            gh release view donnees --json assets --jq '.assets[].name' | grep '^sauvegarde-.*\.db\.gz\.enc$' \
+              | sort | head -n -14 | while read -r vieux; do gh release delete-asset donnees "$vieux" -y; done
+          fi
+          # Suppression des anciennes copies NON chiffrées (une fois la version chiffrée publiée et vérifiée)
+          for f in vinted.db.gz sauvegarde.db.gz; do
+            if gh release view donnees --json assets --jq '.assets[].name' | grep -qx "$f"; then
+              gh release delete-asset donnees "$f" -y && echo "Ancienne copie non chiffrée supprimée : $f"
+            fi
+          done
 
       - name: Garder le relevé actif
         # GitHub coupe les tâches planifiées après 60 jours sans commit : un petit commit par mois.

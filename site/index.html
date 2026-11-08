@@ -48,7 +48,8 @@ header {
   position: sticky; top: 0; z-index: 5; background: var(--fond);
   padding: calc(10px + env(safe-area-inset-top)) 16px 0; border-bottom: 1px solid var(--bord);
 }
-.ligne-titre { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ligne-titre { display: flex; justify-content: space-between; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+.ligne-titre h1 { white-space: nowrap; }
 h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
 .maj { color: var(--texte-3); font-size: 12.5px; margin: 2px 0 8px; }
 /* Bascule Europe / France */
@@ -101,6 +102,8 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .v-bien { background: var(--bon-doux); color: var(--bon); }
 .v-moyen { background: var(--neutre-doux); color: var(--texte-2); }
 .v-eviter { background: var(--froid-doux); color: var(--froid); }
+.v-a_confirmer { background: var(--neutre-doux); color: var(--texte-3); }
+.fiab { font-size: 12px; color: var(--texte-3); margin-top: 4px; }
 .jauge { height: 8px; background: var(--barre-fond); border-radius: 4px; margin: 6px 0 8px; overflow: hidden; }
 .jauge i { display: block; height: 100%; background: var(--barre); border-radius: 0 4px 4px 0; }
 .chiffres { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--texte-2); }
@@ -192,6 +195,7 @@ th { color: var(--texte-2); font-weight: 600; }
     <div class="bascule" role="group" aria-label="Pays des vendeurs">
       <button data-vue="tous" aria-pressed="true">Europe</button>
       <button data-vue="fr" aria-pressed="false">France</button>
+      <button data-vue="part" aria-pressed="false">Particuliers</button>
     </div>
   </div>
   <div class="maj" id="maj">Chargement…</div>
@@ -227,6 +231,11 @@ th { color: var(--texte-2); font-weight: 600; }
       <p>🔥 Très demandé = se vend nettement plus vite que la moyenne · 👍 Se vend bien = au-dessus de la moyenne ·
       😐 Moyen · ❄️ À éviter = se vend peu et intéresse peu. Les petits échantillons sont ramenés vers la moyenne
       pour éviter les faux bons plans. Les chiffres s'affinent au fil des jours.</p>
+      <p><b>Fiabilité</b> (0-100) : largeur de la fourchette de Wilson (95 %) autour du % de vente — plus il y a
+      d'annonces, plus la fourchette est étroite. En dessous de 30 annonces : « ⏳ À confirmer ». L'indice est
+      ramené vers 50 quand la fiabilité est faible. <b>Ventes</b> : « probable » = vue une fois avec la signature
+      d'une vente ; « ✓ confirmée » = revue vendue 12 h plus tard. Les annonces supprimées, masquées ou indisponibles
+      ne sont jamais comptées.</p>
     </details>
     <div id="liste-top"></div>
   </section>
@@ -279,6 +288,7 @@ th { color: var(--texte-2); font-weight: 600; }
         <option value="favoris_jour">Tri : « j'aime » par jour</option>
         <option value="prix_vendu">Tri : prix de vente</option>
         <option value="n">Tri : nb d'annonces</option>
+        <option value="confiance">Tri : fiabilité</option>
       </select>
       <input id="cherche" type="search" placeholder="Filtrer" aria-label="Filtrer">
     </div>
@@ -347,7 +357,14 @@ const delai = (a, b) => {
   if (b === null || b === undefined) return "";
   return !a ? `en moins de ${t(b)}` : `entre ${t(a)} et ${t(b)}`;
 };
-const VERDICTS = { tres_demande: "🔥 Très demandé", bien: "👍 Se vend bien", moyen: "😐 Moyen", eviter: "❄️ À éviter" };
+const VERDICTS = { tres_demande: "🔥 Très demandé", bien: "👍 Se vend bien", moyen: "😐 Moyen", eviter: "❄️ À éviter",
+                   a_confirmer: "⏳ À confirmer (peu d'annonces)" };
+const VENDU = (a) => a.statut === "vendu" || a.statut === "vendu_probable";
+const FEN = { "24h": "24 h", "3j": "3 j", "7j": "7 j" };
+// fourchette de Wilson + note de confiance + nombre exact d'annonces
+const fiab = (l) => l.fenetre ? `<div class="fiab">Fiabilité ${l.confiance ?? 0}/100 · ${l.n_utilisees ?? 0} annonces
+  · fourchette ${fmt(l.ic?.[0])}–${fmt(l.ic?.[1])} % vendues en ${FEN[l.fenetre]}
+  ${l.vendues_confirmees ? `· ${l.vendues_confirmees}/${l.vendues} ventes confirmées` : ""}</div>` : "";
 const TYPES = { produit: "Produit", categorie_large: "Catégorie", marque: "Marque" };
 const memo = (k, v) => { try { v === undefined ? (v = localStorage.getItem(k)) : localStorage.setItem(k, v); } catch (e) {} return v; };
 
@@ -377,15 +394,18 @@ document.querySelectorAll("#puces-top button").forEach((b) => b.addEventListener
 }));
 
 const videFr = () => vue === "fr" ? `<div class="vide">Pas encore assez d'annonces de vendeurs français identifiées.
-  Repasse en « Europe » en attendant : le pays des vendeurs n'est lu que depuis peu.</div>` : null;
+  Repasse en « Europe » en attendant : le pays des vendeurs n'est lu que depuis peu.</div>`
+  : vue === "part" ? `<div class="vide">Pas encore assez d'annonces de particuliers identifiées (le type de vendeur
+  n'est lu sur toutes les annonces que depuis peu). Repasse en « Europe » en attendant.</div>` : null;
 
 // ---------- Top du moment
 function afficherTop() {
   const v = V(), ref = v.reference || {};
   $("#tuiles-top").innerHTML = [
-    [fmt(ref.taux_7j, " %"), "vendues en 7 j (moyenne)"],
+    [fmt(ref.taux_7j, " %"), `vendues en 7 j (moyenne, fourchette ${fmt(ref.ic_7j?.[0])}–${fmt(ref.ic_7j?.[1])} %, ${ref.elig_7j ?? 0} annonces)`],
     [fmt(ref.favoris_jour), "« j'aime » / jour (moyenne)"],
     [v.n_annonces ?? "—", "annonces analysées"],
+    [`${ref.vendues ?? 0}`, `ventes détectées (dont ${ref.vendues_confirmees ?? 0} confirmées)`],
   ].map(([x, t]) => `<div class="tuile"><b>${x}</b><span>${t}</span></div>`).join("");
   const q = $("#cherche-top").value.trim().toLowerCase();
   const lignes = (v.top || []).filter((l) => (!typeTop || l.type === typeTop) && (!q || l.nom.toLowerCase().includes(q)));
@@ -408,7 +428,9 @@ function afficherTop() {
         ${l.delai_h != null ? `<span>délai <b>${duree(l.delai_h)}</b></span>` : ""}
         ${l.part_demande ? `<span>🔥 badge <b>${fmt(l.part_demande, " %")}</b></span>` : ""}
         <span>${TYPES[l.type]} · <b>${l.n}</b> annonces · <b>${l.vendues}</b> vendues</span>
+        ${l.part_pro ? `<span>pros <b>${fmt(l.part_pro, " %")}</b></span>` : ""}
       </div>
+      ${fiab(l)}
       ${(l.exemples || []).length ? `<details class="exemples">
         <summary>Voir les ${l.exemples.length} annonces (vendues d'abord)</summary>
         <div class="grille">${l.exemples.map((a) => carte(a, "aimee")).join("")}</div>
@@ -422,13 +444,15 @@ function carte(a, mode) {
   const prix = a.prix_final || a.prix;
   let bas = "";
   if (mode === "vente") {
-    bas = a.rattrapage ? `<span class="badge">Vendu · mis en ligne ${esc(quand(a.vu_le))}</span>`
-                       : `<span class="badge">Vendu ${esc(delai(a.vendu_apres_h, a.vendu_avant_h))}</span>`;
+    const nature = a.statut === "vendu" ? "Vendu ✓" : "Vendu (probable)";
+    bas = a.rattrapage ? `<span class="badge">${nature} · mis en ligne ${esc(quand(a.vu_le))}</span>`
+                       : `<span class="badge">${nature} ${esc(delai(a.vendu_apres_h, a.vendu_avant_h))}</span>`;
   } else {
     bas = `<span class="badge">${fmt(a.favoris_jour)} ♥ / jour · ${a.favoris ?? 0} ♥</span>`;
   }
-  const etiq = mode === "aimee" ? (a.statut === "vendu" ? `<span class="etiquette vendue">Vendue</span>`
-                                                        : `<span class="etiquette">En vente</span>`) : "";
+  const etiq = mode === "aimee" ? (a.statut === "vendu" ? `<span class="etiquette vendue">Vendue ✓</span>`
+    : a.statut === "vendu_probable" ? `<span class="etiquette vendue">Vendue (probable)</span>`
+    : `<span class="etiquette">En vente</span>`) : "";
   ANNONCES.set(String(a.id ?? a.url), a);
   return `<div class="annonce">
     <a class="lien" href="https://www.vinted.fr${esc(a.url || "/items/" + a.id)}" target="_blank" rel="noopener">
@@ -478,6 +502,7 @@ function afficherDetails() {
         <span>annonces <b>${l.n}</b> · vendues <b>${l.vendues}</b></span>
         ${l.offre_7j !== undefined ? `<span>offre 7 j <b>${l.offre_7j}</b></span>` : ""}
       </div>
+      ${fiab(l)}
     </div>`).join("");
 }
 ["type", "tri"].forEach((id) => $("#" + id).addEventListener("change", afficherDetails));
@@ -524,8 +549,10 @@ function afficherEtat() {
   const r = S.resume, st = r.statuts || {}, ra = r.rattrapage || {};
   const raLues = Object.entries(ra).filter(([k]) => k !== "supprime").reduce((t, [, v]) => t + v, 0);
   $("#tuiles-etat").innerHTML = [
-    [r.annonces_vues, "annonces vues"], [r.suivies, "annonces suivies"], [st.vendu || 0, "ventes (suivi)"],
-    [raLues, "anciennes annonces lues"], [ra.vendu || 0, "dont vendues"], [r.controles_en_retard, "contrôles en retard"],
+    [r.annonces_vues, "annonces vues"], [r.suivies, "annonces suivies"], [(st.vendu || 0) + (st.vendu_probable || 0), "ventes (suivi)"],
+    [raLues, "anciennes annonces lues"], [(ra.vendu || 0) + (ra.vendu_probable || 0), "dont vendues (probables)"],
+    [r.controles_en_retard, "contrôles en retard"], [st.vendu || 0, "ventes confirmées (2 lectures)"],
+    [(st.indisponible || 0) + (ra.indisponible || 0), "indisponibles (pas comptées)"],
   ].map(([v, t]) => `<div class="tuile"><b>${v ?? 0}</b><span>${t}</span></div>`).join("");
   const pays = Object.entries(r.pays || {});
   $("#table-pays").innerHTML = `<tr><th>Pays</th><th>Annonces</th></tr>` +
