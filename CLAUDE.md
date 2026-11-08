@@ -76,6 +76,12 @@
   = Release séparée `restauration-test`, ou `production` avec confirmation RESTAURER ; vérifie GCM + SQLite,
   refuse si un relevé est en train d'écrire, copie de sécurité avant remplacement, contre-vérification),
   `sauvegarde-quotidienne.yml` + `sauvegarde_du_jour.sh`.
+- **Tests de production du 2026-11-08 (16 h-17 h UTC)** : relevé n°19 (V2 seule) OK + création de
+  `sauvegarde-2026-11-08.v2.gcm` ; « Vérifier les sauvegardes » : 4 V2 restaurables, 3 V1 ignorées ; restaurations
+  en `test-temporaire` OK pour precedente, avant-lot1 et quotidienne 2026-11-08 ; production sans RESTAURER refusée.
+  La Release de test `restauration-test` (pré-version, copies chiffrées) existe encore : ne la supprimer qu'avec
+  l'accord de l'utilisateur. Contrôle de la sauvegarde du 2026-11-09 programmé (send_later, 00 h 50 UTC).
+  Suppression des 3 fichiers V1 : EN ATTENTE de la confirmation séparée de l'utilisateur.
 - **Lot 1 (2026-11-08)** : sauvegardes chiffrées dans la Release (voir ci-dessus).
   Schéma versionné (`PRAGMA user_version` = 2, `migrer()`), table `observations` (chaque lecture, jamais écrasée),
   stats : intervalles de Wilson (`ic_*`), `confiance` (0-100 = 100 − 2 × largeur de l'intervalle), `n_utilisees`,
