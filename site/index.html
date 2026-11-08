@@ -323,16 +323,10 @@ th { color: var(--texte-2); font-weight: 600; }
       <button class="fermer" type="button" aria-label="Fermer" onclick="document.getElementById('chine').close()">✕</button>
     </div>
     <h2 style="margin-top:12px">1. Trouver le produit</h2>
-    <div class="puces" id="chine-modes" role="group" aria-label="Mots-clés" style="margin:0 0 8px">
-      <button type="button" data-mode="sans" aria-pressed="true" onclick="choisirMots('sans')">Sans la marque</button>
-      <button type="button" data-mode="type" aria-pressed="false" onclick="choisirMots('type')">Type de produit</button>
-      <button type="button" data-mode="complet" aria-pressed="false" onclick="choisirMots('complet')">Titre complet</button>
-    </div>
     <input class="mots" id="chine-mots" aria-label="Mots-clés de recherche">
     <p class="petit avert-marque" id="chine-marque" hidden></p>
     <div class="liens-chine" id="chine-liens"></div>
-    <p class="petit">La recherche <b>par photo</b> retrouve souvent l'article exact (AliExpress, Temu…).
-      Pour 1688 (grossiste chinois), les mots en chinois donnent de meilleurs résultats.</p>
+    <p class="petit">La recherche <b>par photo</b> est souvent la plus efficace.</p>
     <h2>2. Calculer la marge</h2>
     <div class="champs">
       <label>Prix de vente Vinted (€)<input id="m-vente" type="number" inputmode="decimal" step="0.01" min="0"></label>
@@ -611,11 +605,6 @@ function motsCles(a, mode) {
   }
   return t;
 }
-function choisirMots(mode) {
-  $("#chine-mots").value = motsCles(annonceChine, mode);
-  document.querySelectorAll("#chine-modes button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === mode));
-  liensChine();
-}
 function liensChine() {
   const q = $("#chine-mots").value.trim(), e = encodeURIComponent(q), a = annonceChine;
   const liens = [];
@@ -623,9 +612,6 @@ function liensChine() {
   liens.push(["", "AliExpress", `https://fr.aliexpress.com/w/wholesale-${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`]);
   liens.push(["", "Temu", `https://www.temu.com/fr/search_result.html?search_key=${e}`]);
   liens.push(["", "Alibaba", `https://www.alibaba.com/trade/search?SearchText=${e}`]);
-  liens.push(["", "1688", `https://s.1688.com/selloffer/offer_search.htm?keywords=${e}&charset=utf8`]);
-  liens.push(["", "DHgate", `https://www.dhgate.com/wholesale/search.do?searchkey=${e}`]);
-  liens.push(["", "Traduire en chinois", `https://translate.google.com/?sl=auto&tl=zh-CN&text=${e}`]);
   $("#chine-liens").innerHTML = liens.map(([c, t, u]) => `<a class="${c}" href="${esc(u)}" target="_blank" rel="noopener">${t}</a>`).join("");
 }
 function calculerMarge() {
@@ -665,7 +651,7 @@ function ouvrirChine(a) {
   const prixTxt = prix == null ? "prix non relevé" : euros(prix);
   $("#chine-info").textContent = [VENDU(a) || a.vendu_detecte ? `vendu · ${prixTxt}` : `en vente · ${prixTxt}`,
                                   a.marque, a.categorie].filter(Boolean).join(" · ");
-  choisirMots("sans");
+  $("#chine-mots").value = motsCles(a, "sans");
   const am = $("#chine-marque");
   am.hidden = !aUneMarque(a);
   am.innerHTML = aUneMarque(a) ? `⚠️ Article de marque (<b>${esc(a.marque)}</b>) : les sites chinois ne vendent pas la marque.
