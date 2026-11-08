@@ -372,12 +372,21 @@ th { color: var(--texte-2); font-weight: 600; }
       <div><h3 id="chine-titre"></h3><div class="petit" id="chine-info"></div></div>
       <button class="fermer" type="button" aria-label="Fermer" onclick="document.getElementById('chine').close()">✕</button>
     </div>
-    <h2 style="margin-top:12px">1. Trouver le produit</h2>
+    <h2 style="margin-top:12px">1. Les annonces du même produit sur Vinted</h2>
+    <input class="mots" id="vinted-mots" aria-label="Mots-clés du produit sur Vinted">
+    <div class="liens-chine">
+      <a id="vinted-similaires" href="#" target="_blank" rel="noopener">👀 Voir les annonces</a>
+      <a id="vinted-annonce" href="#" target="_blank" rel="noopener">Cette annonce</a>
+      <a class="photo" id="vinted-analyser" href="#">📊 Analyser : nombre d'annonces, prix, ventes</a>
+    </div>
+    <p class="petit">« Analyser » ouvre une page GitHub : appuie sur <b>Create</b>, le résultat s'affiche ~2 min plus
+      tard dans l'onglet 🔎 Recherche (annonces en ligne, nouvelles par jour, prix, ventes repérées).</p>
+    <h2>2. Trouver le produit en Chine</h2>
     <input class="mots" id="chine-mots" aria-label="Mots-clés de recherche">
     <p class="petit avert-marque" id="chine-marque" hidden></p>
     <div class="liens-chine" id="chine-liens"></div>
     <p class="petit">La recherche <b>par photo</b> est souvent la plus efficace.</p>
-    <h2>2. Calculer la marge</h2>
+    <h2>3. Calculer la marge</h2>
     <div class="champs">
       <label>Prix de vente Vinted (€)<input id="m-vente" type="number" inputmode="decimal" step="0.01" min="0"></label>
       <label>Prix d'achat en Chine (€)<input id="m-achat" type="number" inputmode="decimal" step="0.01" min="0" placeholder="ex. 4,50"></label>
@@ -513,7 +522,7 @@ function afficherOpportunites() {
         <summary>Voir les ${ex.length} annonces vendues</summary>
         <div class="grille">${ex.map((a) => carte(a, "vente")).join("")}</div>
       </details>` : ""}
-      ${photo ? `<button class="chine-btn" type="button" data-cle="${esc(String(photo.id ?? photo.url))}">🇨🇳 Trouver en Chine</button>` : ""}
+      ${photo ? `<button class="chine-btn" type="button" data-cle="${esc(String(photo.id ?? photo.url))}">🔎 Similaires sur Vinted · 🇨🇳 Trouver en Chine</button>` : ""}
     </div>`;
   }).join("");
 }
@@ -584,13 +593,19 @@ function carte(a, mode) {
       <div class="m">${esc(String(a.categorie || "").split(" > ").pop())}</div>
       ${a.badge ? `<span class="badge">🔥 En demande</span> ` : ""}${bas}
     </div></a>
-    <button class="chine-btn" type="button" data-cle="${esc(String(a.id ?? a.url))}">🇨🇳 Trouver en Chine</button>
+    <button class="chine-btn" type="button" data-cle="${esc(String(a.id ?? a.url))}">🔎 Similaires · 🇨🇳 Chine</button>
   </div>`;
 }
 const ANNONCES = new Map();   // annonces affichées (pour le panneau « Trouver en Chine »)
 document.addEventListener("click", (e) => {
   const b = e.target.closest(".chine-btn");
   if (b) ouvrirChine(ANNONCES.get(b.dataset.cle));
+  // toucher une annonce ouvre sa fiche (annonces similaires, Chine, marge) ; « Cette annonce » mène à Vinted
+  const lien = e.target.closest(".annonce .lien");
+  if (lien) {
+    const cle = lien.parentElement.querySelector(".chine-btn")?.dataset.cle;
+    if (cle && ANNONCES.has(cle)) { e.preventDefault(); ouvrirChine(ANNONCES.get(cle)); }
+  }
 });
 function afficherGrilles() {
   const v = V();
@@ -631,13 +646,16 @@ $("#cherche").addEventListener("input", afficherDetails);
 // ---------- recherche ciblée
 $("#form-recherche").addEventListener("submit", (e) => {
   e.preventDefault();
-  const t = $("#texte-recherche").value.trim();
+  lancerAnalyse($("#texte-recherche").value.trim());
+});
+// Analyse « Est-ce que ça se vend ? » : page GitHub pré-remplie (bouton Create) puis suivi du résultat ici
+function lancerAnalyse(t) {
   if (!t) return;
   const corps = "Analyse demandée depuis le tableau de bord.\n\nValide simplement cette page (bouton « Create »). " +
     "La réponse arrivera ici en commentaire dans ~2 minutes, et sur le tableau de bord (onglet Recherche).";
   window.open(`${DEPOT}/issues/new?title=${encodeURIComponent("Recherche : " + t)}&body=${encodeURIComponent(corps)}`, "_blank");
   suivreAnalyse(t);
-});
+}
 // Résultats lus DIRECTEMENT dans le dépôt (sans attendre le prochain relevé) : dossier recherches/ du dépôt public.
 const API_RECHERCHES = "https://api.github.com/repos/Geuks64/vinted-niches/contents/recherches";
 let recherchesDirectes = {};      // numéro -> résultat
@@ -690,7 +708,7 @@ function afficherRecherches() {
       <div class="quand">${esc(quand(r.cree_le))} · <a href="${DEPOT}/issues/${r.numero}" target="_blank" rel="noopener">détail</a></div>
       ${r.verdict ? `<p style="margin:6px 0 0;font-weight:700">${esc(r.verdict)}</p>` : ""}
       <ul>
-        <li>En ligne : <b>${r.en_ligne ?? "—"}</b> annonces · nouvelles / jour : <b>${r.nouvelles_par_jour ?? "—"}</b></li>
+        <li>En ligne : <b>${r.en_ligne == null ? "—" : r.en_ligne >= 960 ? "960 et plus" : r.en_ligne}</b> annonces · nouvelles / jour : <b>${r.nouvelles_par_jour ?? "—"}</b></li>
         <li>Prix : bas ${euros(r.prix_bas)} · moyen <b>${euros(r.prix_median)}</b> · haut ${euros(r.prix_haut)}</li>
         <li>❤️ <b>${fmt(r.favoris_jour)}</b> / jour par annonce (moyenne Vinted ${fmt(r.favoris_jour_moyen_vinted)})</li>
         ${h ? `<li>Déjà repérées : <b>${h.vendues}</b> vendues sur ${h.n} · prix vendu <b>${euros(h.prix_vendu)}</b></li>` : ""}
@@ -759,6 +777,21 @@ function motsCles(a, mode) {
   }
   return t;
 }
+// Annonces du même produit sur Vinted (recherche par mots-clés, marque comprise)
+function liensVinted() {
+  const q = $("#vinted-mots").value.trim();
+  $("#vinted-similaires").href = `https://www.vinted.fr/catalog?search_text=${encodeURIComponent(q)}&order=relevance`;
+}
+$("#vinted-mots").addEventListener("input", liensVinted);
+$("#vinted-analyser").addEventListener("click", (e) => {
+  e.preventDefault();
+  const t = $("#vinted-mots").value.trim();
+  $("#chine").close();
+  $("#texte-recherche").value = t;
+  ouvrirOnglet("recherche");
+  window.scrollTo(0, 0);
+  lancerAnalyse(t);
+});
 function liensChine() {
   const q = $("#chine-mots").value.trim(), e = encodeURIComponent(q), a = annonceChine;
   const liens = [];
@@ -806,6 +839,9 @@ function ouvrirChine(a) {
   $("#chine-info").textContent = [VENDU(a) || a.vendu_detecte ? `vendu · ${prixTxt}` : `en vente · ${prixTxt}`,
                                   aUneMarque(a) ? a.marque : "", a.categorie].filter(Boolean).join(" · ");
   $("#chine-mots").value = motsCles(a, "sans");
+  $("#vinted-mots").value = motsCles(a, "complet");
+  $("#vinted-annonce").href = `https://www.vinted.fr${a.url || "/items/" + a.id}`;
+  liensVinted();
   const am = $("#chine-marque");
   am.hidden = !aUneMarque(a);
   am.innerHTML = aUneMarque(a) ? `⚠️ Article de marque (<b>${esc(a.marque)}</b>) : les sites chinois ne vendent pas la marque.

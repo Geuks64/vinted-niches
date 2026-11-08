@@ -170,7 +170,7 @@ def main():
     h = historique
     lignes = [f"## « {texte} »", "", f"**{verdict or 'Pas encore assez de données pour un avis'}**", "",
               "### En ce moment sur Vinted",
-              f"- Annonces en ligne : **{resultat['en_ligne']}**",
+              f"- Annonces en ligne : **{'960 et plus (Vinted n’en compte pas plus)' if (resultat['en_ligne'] or 0) >= 960 else resultat['en_ligne']}**",
               f"- Nouvelles annonces par jour : **{par_jour if par_jour is not None else '—'}**",
               f"- Prix pratiqués : bas {euros(resultat['prix_bas'])} · moyen **{euros(resultat['prix_median'])}**"
               f" · haut {euros(resultat['prix_haut'])}",
