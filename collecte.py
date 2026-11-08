@@ -198,10 +198,10 @@ def lire_annonce(html):
         m = re.search(r'"' + cle + r'":\s*("[^"]*"|true|false|null|-?\d+(?:\.\d+)?)', f)
         if m:
             brut[cle] = json.loads(m.group(1))
-    for m in re.finditer(r'"([a-z_]*(?:country|city)[a-z_]*)":\s*("[^"]{1,40}"|\d+)', f):
+    for m in re.finditer(r'"(\w*(?:[cC]ountry|[cC]ity)\w*)":\s*("[^"]{1,40}"|\d+)', f):
         if m.group(1) not in brut and len(brut) < 25:
             brut[m.group(1)] = json.loads(m.group(2))
-    m = re.search(r'"badge":\s*(\{[^{}]{0,200}\})', f)
+    m = re.search(r'"(?:badge|itemBadge|item_badge)":\s*(\{[^{}]{0,200}\}|"[^"$][^"]{0,40}")', f)
     if m:
         try:
             brut["badge"] = texte_badge(json.loads(m.group(1)))
@@ -496,6 +496,11 @@ def rattrapage(v, con):
             absentes += 1
             continue
         brut, categorie, prix, d = lire_annonce(r.text)
+        if montres == 0:
+            f = flux_next(r.text)
+            for mot in ("ountry", "badge", "Badge", "location", "demand"):
+                extraits = [f[max(0, x.start() - 80): x.end() + 80] for x in re.finditer(mot, f)][:3]
+                log(f"  [diagnostic] « {mot} » : {extraits}")
         statut = statut_depuis(brut) if ("can_buy" in brut or "availability" in brut) else "inconnu"
         cat_id = brut.get("catalog_id")
         con.execute("""INSERT OR IGNORE INTO rattrapage (id, verifie_le, age_vise_h, age_h, statut, titre, marque,

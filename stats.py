@@ -81,7 +81,7 @@ def pays_de(a):
         return None
     b = json.loads(a["brut"])
     for k, v in b.items():
-        if "country" in k and isinstance(v, str):
+        if "country" in k.lower() and isinstance(v, str):
             if len(v) == 2 and v.isalpha():
                 return v.upper()
             if v.lower() == "france":
