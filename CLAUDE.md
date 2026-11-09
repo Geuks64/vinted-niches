@@ -134,6 +134,10 @@
   25 % -> corrigés : cœur du produit = mots de la requête (pas tout le titre d'origine), règle 25 % appliquée seulement
   si une autre catégorie a des candidats, « ß » -> « ss ». Plafond STRICT de requêtes par relevé = maximum estimé des
   relevés des 3 jours d'avant le pilote (`plafond_requetes`, gardé dans `zoom_etat`) : le rattrapage s'arrête au plafond.
+  2e relevé (10 h 19 UTC) : 10 sondages, tous abandonnés (4 sans résultat : mots trop rares ; 0 % identiques : Jaccard
+  pénalisant les mots inconnus) -> requête = 3 (sinon 2) mots caractéristiques présents ENSEMBLE dans ≥ 2 titres déjà
+  vus ; « identique » = TOUS les mots du produit dans le titre + neuf sans marque + prix ×2,5 (raisons d'exclusion
+  journalisées).
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

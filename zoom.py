@@ -29,6 +29,8 @@ import time
 from collections import Counter
 from urllib.parse import quote_plus
 
+from itertools import combinations
+
 import collecte
 import produits
 from cible import CATEGORIES_EXCLUES, est_cible, simplifier
@@ -138,12 +140,16 @@ def mots_ordonnes(titre):
 
 
 def calculer_idf(con):
+    """Rareté des mots (IDF) + index mot -> titres où il apparaît (pour trouver les mots qui REVIENNENT)."""
     titres = [r[0] for r in con.execute(
         "SELECT titre FROM annonces WHERE suivi = 1 UNION ALL SELECT titre FROM rattrapage WHERE titre IS NOT NULL")]
-    df = Counter(m for t in titres for m in produits.mots(t))
+    index = {}
+    for i, t in enumerate(titres):
+        for m in produits.mots(t):
+            index.setdefault(m, set()).add(i)
     total = max(1, len(titres))
-    idf = {m: math.log(1 + total / c) for m, c in df.items()}
-    return idf, math.log(1 + total)       # mot jamais vu = le plus rare possible (prudence)
+    idf = {m: math.log(1 + total / len(ids)) for m, ids in index.items()}
+    return idf, math.log(1 + total), index
 
 
 def score(jeu, coeur, idf, idf_max):
@@ -158,18 +164,26 @@ def score(jeu, coeur, idf, idf_max):
 SEUIL_INFO = math.log(1 + 20)    # mot présent dans moins de ~5 % des titres
 
 
-def identique(carte, coeur, prix_ref, idf, idf_max):
-    """(est identique, score) — prudent : au moindre doute, NON."""
+def identique(carte, coeur, prix_ref, idf, idf_max, raisons=None):
+    """(est identique, part des mots du produit présents) — prudent : au moindre doute, NON.
+    Identique = neuf + sans marque + TOUS les mots caractéristiques du produit dans le titre + prix compatible.
+    (Corrigé le 2026-11-09 : le score de Jaccard pénalisait les mots inconnus — couleur, taille… — et rejetait
+    des annonces qui contenaient pourtant tous les mots du produit.)"""
+    raisons = raisons if raisons is not None else Counter()
     if not est_cible(carte):                       # neuf + sans marque
+        raisons["marque ou état"] += 1
         return False, 0.0
     jeu = produits.mots(carte.get("titre"))
-    s = score(jeu, coeur, idf, idf_max)
-    communs = sum(1 for m in jeu & coeur if idf.get(m, idf_max) >= SEUIL_INFO)
-    prix_ok = True
+    part = len(jeu & coeur) / len(coeur) if coeur else 0.0
+    if part < 1:
+        raisons["mots manquants"] += 1
+        return False, round(part, 3)
     if carte.get("prix") and prix_ref:
         r = carte["prix"] / prix_ref
-        prix_ok = 1 / produits.ECART_PRIX_MAX <= r <= produits.ECART_PRIX_MAX
-    return (s >= produits.SEUIL_IDENTIQUE and communs >= produits.MOTS_COMMUNS_MIN and prix_ok), round(s, 3)
+        if not 1 / produits.ECART_PRIX_MAX <= r <= produits.ECART_PRIX_MAX:
+            raisons["prix trop différent"] += 1
+            return False, 1.0
+    return True, 1.0
 
 
 # ---------------------------------------------------------------- lecture d'une page de recherche
@@ -196,7 +210,7 @@ def journal(con, produit_id, type_, http, note=""):
 
 
 # ---------------------------------------------------------------- 1. candidats (aucune requête)
-def candidats(con, maintenant, idf, idf_max):
+def candidats(con, maintenant, idf, idf_max, index):
     recents = con.execute("SELECT requete, coeur FROM zoom_produits WHERE cree_le > ?",
                           (maintenant - OUBLI_J * 86400,)).fetchall()
     deja = {r[0] for r in recents}
@@ -212,12 +226,22 @@ def candidats(con, maintenant, idf, idf_max):
         a = dict(zip(("id", "titre", "marque", "etat", "categorie", "prix", "vitesse_h", "favoris", "source"), r))
         if not est_cible(a) or (a["prix"] or 0) < PRIX_MIN:
             continue
-        info = [m for m in mots_ordonnes(a["titre"]) if idf.get(m, idf_max) >= SEUIL_INFO]
-        if len(info) < produits.MOTS_COMMUNS_MIN:
+        # mots caractéristiques (rares) mais qui REVIENNENT dans au moins 2 titres (pas les mots uniques à cette
+        # annonce, qui donnaient des recherches sans résultat) ; corrigé le 2026-11-09
+        ordre = mots_ordonnes(a["titre"])
+        info = [m for m in ordre if idf.get(m, idf_max) >= SEUIL_INFO and len(index.get(m, ())) >= 2]
+        meilleurs = sorted(info, key=lambda m: -idf.get(m, idf_max))[:5]
+        garder = None
+        for k in (3, 2):                           # combinaison de 3 (sinon 2) mots présents ENSEMBLE dans ≥ 2 titres
+            for combi in combinations(meilleurs, k):
+                if len(set.intersection(*(index[m] for m in combi))) >= 2:
+                    garder = set(combi)
+                    break
+            if garder:
+                break
+        if not garder:
             continue
-        # les 4 mots les plus caractéristiques, remis dans l'ordre du titre
-        garder = set(sorted(info, key=lambda m: -idf.get(m, idf_max))[:4])
-        requete = " ".join(m for m in info if m in garder)
+        requete = " ".join(m for m in ordre if m in garder)
         # cœur du produit = les mots de la requête (corrigé le 2026-11-09 : tout le titre de l'annonce d'origine
         # rendait la comparaison trop stricte, 0 à 3 % de résultats « identiques » au 1er relevé du pilote)
         coeur = set(garder)
@@ -288,7 +312,8 @@ def sonder(b, con, g, idf, idf_max):
         return False
     cartes, vendeurs, total = lire_resultats(r.text) if r.status_code == 200 else ([], {}, 0)
     coeur = set(g["coeur"])
-    idents = [c for c in cartes if identique(c, coeur, g["prix"], idf, idf_max)[0]]
+    raisons = Counter()
+    idents = [c for c in cartes if identique(c, coeur, g["prix"], idf, idf_max, raisons)[0]]
     part = len(idents) / len(cartes) if cartes else 0.0
     prix_med = produits.mediane([c["prix"] for c in idents])
     total = total if total is not None else len(cartes)
@@ -316,7 +341,8 @@ def sonder(b, con, g, idf, idf_max):
             f"identiques, prix médian {prix_med} € -> SUIVI ({mode}, {ajout} annonces ; vendeur lisible sur "
             f"{vus}/{len(cartes)} cartes)")
     else:
-        log(f"  P2 sondage « {g['requete']} » ({g['categorie']}) : {total} en ligne -> abandonné : {raison}")
+        log(f"  P2 sondage « {g['requete']} » ({g['categorie']}) : {total} en ligne -> abandonné : {raison}"
+            + (f" | écartées : {dict(raisons)}" if raisons else ""))
     con.commit()
     return True
 
@@ -422,7 +448,7 @@ def executer(v, con):
         log(f"P2 en pause (blocage récent) jusqu'à {time.strftime('%H:%M', time.gmtime(pause))} UTC : 0 requête")
         return 0
     b = Budget(v, con, QUOTA)
-    idf, idf_max = calculer_idf(con)
+    idf, idf_max, index = calculer_idf(con)
     cats = dict(con.execute("SELECT id, categorie FROM zoom_produits"))
 
     # a) confirmations dues (ventes probables vues il y a 12 h)
@@ -452,7 +478,7 @@ def executer(v, con):
     # d) nouveaux sondages (pendant les 3 jours de découverte seulement)
     graines = []
     if maintenant < debut + DECOUVERTE_J * 86400:
-        graines = candidats(con, maintenant, idf, idf_max)
+        graines = candidats(con, maintenant, idf, idf_max, index)
         while b.reste() > 0 and graines:
             g = choisir(con, graines, int(time.time()))
             if g is None:
