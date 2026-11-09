@@ -193,13 +193,19 @@ def opportunites(suivies, ratt, maintenant):
         groupes_r[a["categorie"]].append(a)
     ref = segment_stats(s_c, maintenant, r_c)
     res = []
+    refus = defaultdict(int)          # pourquoi un type n'est pas (encore) affiché (journal du relevé)
     for cat in set(groupes) | set(groupes_r):
         st = segment_stats(groupes.get(cat, []), maintenant, groupes_r.get(cat, []))
         vente = st["prix_vendu"]
-        if st["n"] < N_MIN or st["vendues"] < 2 or not st["fenetre"] or not vente:
+        raison = ("moins de 8 annonces" if st["n"] < N_MIN else "moins de 2 ventes" if st["vendues"] < 2 else
+                  "pas encore 8 annonces du même âge (24 h / 3 j / 7 j)" if not st["fenetre"] else
+                  "ventes sans prix" if not vente else None)
+        if raison:
+            refus[raison] += 1
             continue
         achat_max = round(vente * (1 - COTISATIONS - MARGE_VISEE) - EMBALLAGE, 2)
         if achat_max < 0.5:          # trop bon marché pour dégager un vrai gain
+            refus["trop bon marché"] += 1
             continue
         gain = round(vente * MARGE_VISEE, 2)
         f = st["fenetre"]
@@ -218,7 +224,7 @@ def opportunites(suivies, ratt, maintenant):
             "exemples": [exemple(a, maintenant) for a in vendues[:12]],
         })
     res.sort(key=lambda o: -o["score"])
-    return {"liste": res[:N_OPPORTUNITES], "n_types": len(res),
+    return {"liste": res[:N_OPPORTUNITES], "n_types": len(res), "refus": dict(refus),
             "suivies": len(s_c), "rattrapage": len(r_c), "vendues": ref["vendues"],
             "taux_moyen": ref["taux_" + ref["fenetre"]] if ref["fenetre"] else None,
             "fenetre_moyenne": ref["fenetre"],
@@ -421,7 +427,7 @@ def main():
           f"{len(vue_fr['top'])} en France")
     o = vue_tous["opportunites"]
     print(f"Opportunités : {len(o['liste'])} affichées / {o['n_types']} types | {o['suivies']} neuves sans marque suivies, "
-          f"{o['rattrapage']} en rattrapage, {o['vendues']} vendues"
+          f"{o['rattrapage']} en rattrapage, {o['vendues']} vendues | types écartés : {o['refus']}"
           + "".join(f"\n  - {x['type']} ({x['chemin']}) : vend {x['prix_vendu']} €, achat max {x['achat_max']} €, "
                     f"{x['taux']} % en {x['fenetre']}, {x['n']} annonces" for x in o["liste"]))
 
