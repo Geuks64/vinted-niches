@@ -1,14 +1,15 @@
-# DIAGNOSTICS manuels, lecture seule : diag_catalogue.py (listes filtrées) ou diag_prix.py (prix des annonces vendues).
+# DIAGNOSTICS manuels, lecture seule : diag_catalogue.py (listes filtrées), diag_prix.py (prix des annonces vendues),
+# diag_produits.py (regroupement en produits, aucune requête Vinted).
 # Ne tourne jamais en même temps que la collecte d'un relevé. La base est lue, jamais modifiée ni publiée.
 name: Diagnostic (lecture seule)
 on:
   workflow_dispatch:
     inputs:
       test:
-        description: "catalogue = listes filtrées ; prix = prix des annonces vendues"
+        description: "produits = volume par produit (sans requête Vinted) ; prix ; catalogue"
         type: choice
-        options: [prix, catalogue]
-        default: prix
+        options: [produits, prix, catalogue]
+        default: produits
 permissions:
   contents: read
   actions: read
