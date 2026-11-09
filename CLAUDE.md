@@ -85,8 +85,14 @@
   `sauvegarde-2026-11-08.v2.gcm` ; « Vérifier les sauvegardes » : 4 V2 restaurables, 3 V1 ignorées ; restaurations
   en `test-temporaire` OK pour precedente, avant-lot1 et quotidienne 2026-11-08 ; production sans RESTAURER refusée.
   La Release de test `restauration-test` (pré-version, copies chiffrées) existe encore : ne la supprimer qu'avec
-  l'accord de l'utilisateur. Contrôle de la sauvegarde du 2026-11-09 programmé (send_later, 00 h 50 UTC).
-  Suppression des 3 fichiers V1 : EN ATTENTE de la confirmation séparée de l'utilisateur.
+  l'accord de l'utilisateur.
+- **Contrôle du 2026-11-09 00 h 50 UTC : OK** — `sauvegarde-2026-11-09.v2.gcm` créée à 00 h 02 UTC par le relevé
+  42537050148 (le cron de « Sauvegarde du jour » de 00 h 17 ne s'est PAS déclenché) ; « Vérifier les sauvegardes »
+  (run 42542374234) : 5 V2 restaurables, 3 V1 ignorées ; restauration test-temporaire de la quotidienne 2026-11-09
+  (run 42542430660) OK (17 013 annonces, SHA-256 e4c56e4c…) ; Release `donnees` identique avant/après les tests ;
+  `restauration-test` = 9 fichiers commençant tous par « NICHESv2 », utilisée seulement par restaurer.sh.
+  EN ATTENTE de 2 accords SÉPARÉS de l'utilisateur : (a) suppression des 3 fichiers V1, (b) suppression de la
+  Release `restauration-test`. Ne rien supprimer sans eux.
 - **Lot 1 (2026-11-08)** : sauvegardes chiffrées dans la Release (voir ci-dessus).
   Schéma versionné (`PRAGMA user_version` = 2, `migrer()`), table `observations` (chaque lecture, jamais écrasée),
   stats : intervalles de Wilson (`ic_*`), `confiance` (0-100 = 100 − 2 × largeur de l'intervalle), `n_utilisees`,
