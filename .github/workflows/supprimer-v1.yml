@@ -1,0 +1,64 @@
+# USAGE UNIQUE (accord explicite de l'utilisateur le 2026-11-09, opération « A ») :
+# suppression des 3 anciens fichiers V1 (AES-256-CBC, plus lus par l'outil) de la Release « donnees ».
+# Sécurités :
+#   - ne peut supprimer QUE ces 3 noms exacts (jamais un fichier .v2.gcm) ;
+#   - exige de taper SUPPRIMER-V1 ;
+#   - vérifie AVANT toute suppression que chaque sauvegarde V2 est authentique et restaurable (sinon arrêt).
+# Ce workflow est retiré du dépôt une fois l'opération faite.
+name: Supprimer les anciens fichiers V1
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Taper SUPPRIMER-V1"
+        required: true
+permissions:
+  contents: write
+jobs:
+  supprimer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NICHES_CLE: ${{ secrets.NICHES_CLE }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -q cryptography==44.0.0
+      - name: Suppression des 3 fichiers V1 (après vérification des V2)
+        run: |
+          set -euo pipefail
+          if [ "$CONFIRMATION" != "SUPPRIMER-V1" ]; then echo "Confirmation absente : rien n'est supprimé." >&2; exit 1; fi
+          bash base.sh cle_presente
+          V1="vinted.db.gz.enc precedente.db.gz.enc avant-lot1.db.gz.enc"
+          actifs=$(gh release view donnees --json assets --jq '.assets[].name')
+          echo "== 1. Vérification de toutes les sauvegardes V2 avant suppression"
+          mkdir -p v2 && cd v2
+          n=0
+          for f in $(echo "$actifs" | grep '\.v2\.gcm$'); do
+            gh release download donnees -p "$f" --clobber
+            bash ../base.sh dechiffrer "$f" "test-$n.db" > /dev/null      # échec = arrêt, rien n'est supprimé
+            echo "OK  $f (authentique, restaurable)"
+            n=$((n+1))
+          done
+          for f in vinted.v2.gcm precedente.v2.gcm avant-lot1.v2.gcm; do
+            echo "$actifs" | grep -qx "$f" || { echo "ERREUR : $f absent : arrêt, rien n'est supprimé." >&2; exit 1; }
+          done
+          cd ..
+          echo "== 2. Empreintes des fichiers V1 (pour mémoire) puis suppression"
+          mkdir -p v1
+          for f in $V1; do
+            case "$f" in *.v2.gcm) echo "REFUS : $f est un fichier V2" >&2; exit 1 ;; esac
+            if echo "$actifs" | grep -qx "$f"; then
+              (cd v1 && gh release download donnees -p "$f" --clobber)
+              echo "$f : $(stat -c %s "v1/$f") octets, SHA-256 $(sha256sum "v1/$f" | cut -d' ' -f1)"
+              gh release delete-asset donnees "$f" -y
+              echo "   supprimé"
+            else
+              echo "$f : déjà absent"
+            fi
+          done
+          echo "== 3. Contenu de la Release après l'opération"
+          gh release view donnees --json assets --jq '.assets[] | "\(.name)  \(.size) octets"'
