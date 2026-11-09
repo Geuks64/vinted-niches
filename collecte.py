@@ -639,7 +639,7 @@ def id_pour_age(con, age_h, maintenant):
     return int(ref[1] - (ref[0] - cible) * debit_ids(con))
 
 
-def rattrapage(v, con, limite=None):
+def rattrapage(v, con, limite=None, plafond=10**9):
     """Va voir des annonces publiées il y a ~1 j, ~3 j, ~7 j (numéros tirés au hasard)
     et note tout de suite si elles sont vendues. Utilise le temps restant du relevé.
     limite : nombre max de lectures (RATTRAPAGE_MAX moins les requêtes utilisées par le pilote P2)."""
@@ -648,7 +648,7 @@ def rattrapage(v, con, limite=None):
         return 0, 0
     faits = ventes = absentes = erreurs = 0
     montres = 0
-    while faits + absentes < limite and not v.bloque() and temps_restant() > 30:
+    while faits + absentes < limite and not v.bloque() and temps_restant() > 30 and v.requetes < plafond:
         maintenant = int(time.time())
         age_vise = RATTRAPAGE_AGES_H[(faits + absentes) % len(RATTRAPAGE_AGES_H)]
         iid = id_pour_age(con, age_vise * random.uniform(0.85, 1.15), maintenant)
@@ -771,6 +771,21 @@ def compacter(con):
         log(f"Compactage : {n} anciennes annonces non suivies résumées")
 
 
+def plafond_requetes(con):
+    """Plafond STRICT de requêtes par relevé pendant le pilote P2 : le maximum estimé des relevés des 3 jours
+    d'avant le pilote (accueil + 6 pages + une lecture par observation). Calculé une fois, puis gardé."""
+    r = con.execute("SELECT valeur FROM zoom_etat WHERE cle = 'plafond_requetes'").fetchone()
+    if r:
+        return int(r[0])
+    ref = con.execute("""SELECT MAX(7 + (SELECT COUNT(*) FROM observations o WHERE o.ts BETWEEN r.debut
+                         AND r.debut + r.duree)) FROM releves r WHERE r.requetes IS NULL
+                         AND r.debut > ?""", (int(time.time()) - 3 * 86400,)).fetchone()[0]
+    plafond = int(ref or 150)
+    con.execute("INSERT OR REPLACE INTO zoom_etat VALUES ('plafond_requetes', ?)", (str(plafond),))
+    con.commit()
+    return plafond
+
+
 def comparer_requetes(con):
     """Requêtes par relevé : 24 dernières heures (compteur exact) vs période d'avant le compteur (estimation :
     accueil + 6 pages de catalogue + une lecture par observation enregistrée pendant le relevé)."""
@@ -805,7 +820,10 @@ def main():
         con.rollback()
         req_zoom = v.requetes - req_avant_zoom
     req_avant_ratt = v.requetes
-    r_faits, r_ventes = rattrapage(v, con, limite=max(0, RATTRAPAGE_MAX - req_zoom))
+    import zoom as _z
+    _z.creer_tables(con)
+    plafond = plafond_requetes(con)
+    r_faits, r_ventes = rattrapage(v, con, limite=max(0, RATTRAPAGE_MAX - req_zoom), plafond=plafond)
     req_ratt = v.requetes - req_avant_ratt
     faits, ventes = faits + r_faits, ventes + r_ventes
     note = "bloqué par Vinted" if v.bloque() else ""
@@ -815,7 +833,8 @@ def main():
                  v.requetes, req_zoom))
     con.commit()
     log(f"Requêtes Vinted de ce relevé : {v.requetes} (dont P2 {req_zoom}, rattrapage {req_ratt}, "
-        f"limite du rattrapage {max(0, RATTRAPAGE_MAX - req_zoom)} au lieu de {RATTRAPAGE_MAX})")
+        f"limite du rattrapage {max(0, RATTRAPAGE_MAX - req_zoom)} au lieu de {RATTRAPAGE_MAX}, "
+        f"plafond strict du relevé {plafond} = maximum d'avant le pilote)")
     comparer_requetes(con)
     en_attente = con.execute("SELECT COUNT(*) FROM annonces WHERE prochain_controle IS NOT NULL "
                              "AND prochain_controle <= ?", (int(time.time()),)).fetchone()[0]

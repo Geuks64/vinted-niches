@@ -218,7 +218,9 @@ def candidats(con, maintenant, idf, idf_max):
         # les 4 mots les plus caractéristiques, remis dans l'ordre du titre
         garder = set(sorted(info, key=lambda m: -idf.get(m, idf_max))[:4])
         requete = " ".join(m for m in info if m in garder)
-        coeur = set(garder) | {m for m in produits.mots(a["titre"]) if idf.get(m, idf_max) >= SEUIL_INFO}
+        # cœur du produit = les mots de la requête (corrigé le 2026-11-09 : tout le titre de l'annonce d'origine
+        # rendait la comparaison trop stricte, 0 à 3 % de résultats « identiques » au 1er relevé du pilote)
+        coeur = set(garder)
         if requete in deja or any(score(coeur, c, idf, idf_max) >= produits.SEUIL_IDENTIQUE for c in coeurs_deja):
             continue
         v = a["vitesse_h"]
@@ -232,11 +234,15 @@ def candidats(con, maintenant, idf, idf_max):
 
 
 def choisir(con, graines, maintenant):
-    """Catégorie principale la moins sondée sur 24 h d'abord ; aucune au-delà de 25 % des sondages."""
+    """Tour de rôle : la catégorie principale la moins sondée sur 24 h passe d'abord ; une catégorie au-delà de
+    25 % des sondages est écartée TANT QU'une autre catégorie a des candidats (corrigé le 2026-11-09 : la règle
+    stricte bloquait tout dès 5 sondages)."""
     par_racine = Counter(r[0] for r in con.execute("SELECT racine FROM zoom_produits WHERE cree_le > ?",
                                                    (maintenant - 86400,)))
     total = sum(par_racine.values())
-    ok = [g for g in graines if total < 4 or (par_racine[g["racine"]] + 1) / (total + 1) <= PART_RACINE_MAX]
+    ok = [g for g in graines if (par_racine[g["racine"]] + 1) / (total + 1) <= PART_RACINE_MAX]
+    if not ok:                                    # toutes au-dessus : la moins sondée (tour de rôle)
+        ok = graines
     random.shuffle(ok)
     ok.sort(key=lambda g: (par_racine[g["racine"]], -g["priorite"]))
     return ok[0] if ok else None

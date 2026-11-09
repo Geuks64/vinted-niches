@@ -130,6 +130,10 @@
   erreur réseau / réponse inhabituelle -> arrêt pour le relevé. Tables `zoom_etat`, `zoom_produits`, `zoom_annonces`,
   `zoom_journal` (même base chiffrée, rien changé au chiffrement / sauvegardes / workflows). Bilan dans le journal de
   chaque relevé (`zoom.bilan`). PAS d'écran final avant validation des résultats par l'utilisateur.
+  1er relevé du pilote (2026-11-09 09 h 35 UTC) : 5 sondages tous abandonnés (0-3 % identiques) + blocage de la règle
+  25 % -> corrigés : cœur du produit = mots de la requête (pas tout le titre d'origine), règle 25 % appliquée seulement
+  si une autre catégorie a des candidats, « ß » -> « ss ». Plafond STRICT de requêtes par relevé = maximum estimé des
+  relevés des 3 jours d'avant le pilote (`plafond_requetes`, gardé dans `zoom_etat`) : le rattrapage s'arrête au plafond.
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

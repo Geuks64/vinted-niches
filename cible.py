@@ -11,7 +11,7 @@ MARQUES_VIDES = {"(sans marque)", "no label", "sans marque", "none", "autre", "o
 
 def simplifier(t):
     """minuscules, sans accents ni espaces superflus (pour comparer marque et titre)."""
-    t = unicodedata.normalize("NFD", str(t or "").lower())
+    t = unicodedata.normalize("NFD", str(t or "").lower().replace("ß", "ss"))
     return " ".join("".join(c for c in t if unicodedata.category(c) != "Mn").split())
 
 
