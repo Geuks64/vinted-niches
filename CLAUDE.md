@@ -138,6 +138,9 @@
   pénalisant les mots inconnus) -> requête = 3 (sinon 2) mots caractéristiques présents ENSEMBLE dans ≥ 2 titres déjà
   vus ; « identique » = TOUS les mots du produit dans le titre + neuf sans marque + prix ×2,5 (raisons d'exclusion
   journalisées).
+  3e relevé (11 h 02 UTC) : 1 suivi sur 10 (« call duty black », jeu vidéo) ; 85-90 % des résultats de requêtes
+  génériques (« veste marron ») sont de marque -> jeux vidéo exclus des cibles (`CATEGORIES_EXCLUES`) et produits déjà
+  suivis dans une catégorie exclue arrêtés ; mots « qui reviennent » cherchés parmi les titres NEUFS SANS MARQUE.
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

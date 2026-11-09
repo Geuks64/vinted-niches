@@ -140,15 +140,20 @@ def mots_ordonnes(titre):
 
 
 def calculer_idf(con):
-    """Rareté des mots (IDF) + index mot -> titres où il apparaît (pour trouver les mots qui REVIENNENT)."""
-    titres = [r[0] for r in con.execute(
-        "SELECT titre FROM annonces WHERE suivi = 1 UNION ALL SELECT titre FROM rattrapage WHERE titre IS NOT NULL")]
-    index = {}
-    for i, t in enumerate(titres):
+    """Rareté des mots (IDF, sur tous les titres) + index mot -> titres NEUFS SANS MARQUE où il apparaît (pour
+    trouver les mots qui reviennent parmi les produits de type « Chine », pas parmi les vêtements de marque)."""
+    lignes = con.execute("""SELECT titre, marque, etat, categorie FROM annonces WHERE suivi = 1 UNION ALL
+                            SELECT titre, marque, etat, categorie FROM rattrapage WHERE titre IS NOT NULL""").fetchall()
+    titres = [r[0] for r in lignes]
+    index, tous = {}, {}
+    for i, (t, marque, etat_, cat) in enumerate(lignes):
+        cible_ok = est_cible({"titre": t, "marque": marque, "etat": etat_, "categorie": cat})
         for m in produits.mots(t):
-            index.setdefault(m, set()).add(i)
+            tous.setdefault(m, set()).add(i)
+            if cible_ok:
+                index.setdefault(m, set()).add(i)
     total = max(1, len(titres))
-    idf = {m: math.log(1 + total / len(ids)) for m, ids in index.items()}
+    idf = {m: math.log(1 + total / len(ids)) for m, ids in tous.items()}
     return idf, math.log(1 + total), index
 
 
@@ -447,6 +452,10 @@ def executer(v, con):
     if pause > maintenant:
         log(f"P2 en pause (blocage récent) jusqu'à {time.strftime('%H:%M', time.gmtime(pause))} UTC : 0 requête")
         return 0
+    # produits d'une catégorie exclue après coup (ex. jeux vidéo, 2026-11-09) : suivi arrêté, aucune requête
+    for prefixe in CATEGORIES_EXCLUES:
+        con.execute("""UPDATE zoom_produits SET statut = 'abandonne', raison = 'catégorie exclue', prochain_passage = NULL
+                       WHERE statut = 'suivi' AND categorie LIKE ?""", (prefixe + "%",))
     b = Budget(v, con, QUOTA)
     idf, idf_max, index = calculer_idf(con)
     cats = dict(con.execute("SELECT id, categorie FROM zoom_produits"))

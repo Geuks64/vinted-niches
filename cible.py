@@ -23,7 +23,8 @@ def sans_marque(marque, titre):
 
 # Catégories sans intérêt pour l'achat en Chine : livres, CD, films… n'ont jamais de « marque » sur Vinted,
 # ils passeraient tous pour « sans marque » (constaté le 2026-11-08 : les 3 catégories cibles les plus vues).
-CATEGORIES_EXCLUES = ("Livres et médias",)
+# Idem jeux vidéo (constaté le 2026-11-09 : « Call of Duty », « Mario » passaient pour « sans marque »).
+CATEGORIES_EXCLUES = ("Livres et médias", "Électronique > Jeux vidéo et consoles")
 
 
 def est_cible(a):
