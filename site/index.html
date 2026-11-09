@@ -509,6 +509,7 @@ function afficherOpportunites() {
           <div class="opp-rang">N° ${i + 1}${x.a_confirmer ? `<span class="a-confirmer">⏳ À confirmer</span>` : ""}</div>
           <div class="opp-type">${esc(x.type)}</div>
           <div class="opp-chemin">${esc(x.chemin)}</div>
+          ${(x.regroupe || []).length ? `<div class="opp-chemin">dont ${esc(x.regroupe.join(", "))}${x.regroupe.length >= 6 ? "…" : ""}</div>` : ""}
           <div class="opp-vite${chaud ? "" : " calme"}">${chaud ? "🔥 " : ""}${vite}</div>
           ${detail ? `<div class="opp-chemin">${detail.slice(3)}</div>` : ""}
         </div>

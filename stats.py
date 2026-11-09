@@ -180,49 +180,67 @@ def exemple(a, maintenant):
 def opportunites(suivies, ratt, maintenant):
     """Les types d'articles NEUFS SANS MARQUE qui se vendent le mieux, avec le prix d'achat à ne pas dépasser.
 
-    Type = catégorie la plus fine de Vinted (ex. « Bijoux > Bagues »). Les chiffres sont calculés sur le type,
-    les exemples sont les vraies annonces vendues de ce type.
+    Type = catégorie la plus fine de Vinted (ex. « Bijoux > Bagues »). Si elle n'a pas encore assez d'annonces
+    (moins de N_MIN, ou pas encore N_MIN du même âge), ses annonces sont regroupées dans la catégorie du dessus
+    (ex. « Bijoux »), jusqu'à 2 niveaux au minimum (ex. « Femmes > Accessoires ») : les seuils restent les mêmes.
+    Les chiffres sont calculés sur le type ; les exemples sont les vraies annonces vendues de ce type.
     Prix d'achat max = prix de vente × (1 − cotisations − marge visée) − emballage  -> gain ≈ marge visée × prix.
     Classement prudent : borne basse de l'intervalle de Wilson du % vendu × gain par pièce."""
     s_c = [a for a in suivies if a.get("categorie") and est_cible(a)]
     r_c = [a for a in ratt if a.get("categorie") and est_cible(a)]
-    groupes, groupes_r = defaultdict(list), defaultdict(list)
+    # groupes : chemin de catégorie -> (annonces suivies, annonces du rattrapage, sous-catégories regroupées)
+    groupes = defaultdict(lambda: ([], [], set()))
     for a in s_c:
-        groupes[a["categorie"]].append(a)
+        groupes[a["categorie"]][0].append(a)
     for a in r_c:
-        groupes_r[a["categorie"]].append(a)
+        groupes[a["categorie"]][1].append(a)
     ref = segment_stats(s_c, maintenant, r_c)
     res = []
     refus = defaultdict(int)          # pourquoi un type n'est pas (encore) affiché (journal du relevé)
-    for cat in set(groupes) | set(groupes_r):
-        st = segment_stats(groupes.get(cat, []), maintenant, groupes_r.get(cat, []))
-        vente = st["prix_vendu"]
-        raison = ("moins de 8 annonces" if st["n"] < N_MIN else "moins de 2 ventes" if st["vendues"] < 2 else
-                  "pas encore 8 annonces du même âge (24 h / 3 j / 7 j)" if not st["fenetre"] else
-                  "ventes sans prix" if not vente else None)
-        if raison:
-            refus[raison] += 1
-            continue
-        achat_max = round(vente * (1 - COTISATIONS - MARGE_VISEE) - EMBALLAGE, 2)
-        if achat_max < 0.5:          # trop bon marché pour dégager un vrai gain
-            refus["trop bon marché"] += 1
-            continue
-        gain = round(vente * MARGE_VISEE, 2)
-        f = st["fenetre"]
-        bas = st["ic_" + f][0] or 0
-        vendues = [a for a in groupes.get(cat, []) + groupes_r.get(cat, []) if est_vendu(a)]
-        vendues.sort(key=lambda a: (not a.get("miniature"), -(a.get("vendu_detecte") or a.get("verifie_le") or 0)))
-        niveaux = cat.split(" > ")
-        res.append({
-            "nom": cat, "type": niveaux[-1], "chemin": " > ".join(niveaux[:-1]),
-            "prix_vendu": vente, "achat_max": achat_max, "gain": gain,
-            "delai_h": st["delai_h"], "fenetre": f, "taux": st["taux_" + f], "ic": st["ic_" + f],
-            "n": st["n"], "n_utilisees": st["n_utilisees"], "vendues": st["vendues"],
-            "vendues_confirmees": st["vendues_confirmees"], "confiance": st["confiance"],
-            "a_confirmer": st["n_utilisees"] < N_FIABLE,
-            "score": round(bas / 100 * gain, 2),
-            "exemples": [exemple(a, maintenant) for a in vendues[:12]],
-        })
+    # du niveau le plus fin au plus large : un groupe trop petit remonte d'un niveau
+    while groupes:
+        profondeur = max(len(c.split(" > ")) for c in groupes)
+        a_remonter = defaultdict(lambda: ([], [], set()))
+        for cat in [c for c in groupes if len(c.split(" > ")) == profondeur]:
+            g_s, g_r, sous = groupes.pop(cat)
+            st = segment_stats(g_s, maintenant, g_r)
+            vente = st["prix_vendu"]
+            trop_peu = st["n"] < N_MIN or not st["fenetre"]
+            if trop_peu and profondeur > 2:
+                parent = " > ".join(cat.split(" > ")[:-1])
+                p = groupes[parent] if parent in groupes else a_remonter[parent]
+                p[0].extend(g_s)
+                p[1].extend(g_r)
+                p[2].update(sous or {cat.split(" > ")[-1]})
+                continue
+            raison = ("moins de 8 annonces" if st["n"] < N_MIN else
+                      "pas encore 8 annonces du même âge (24 h / 3 j / 7 j)" if not st["fenetre"] else
+                      "moins de 2 ventes" if st["vendues"] < 2 else "ventes sans prix" if not vente else None)
+            if raison:
+                refus[raison] += 1
+                continue
+            achat_max = round(vente * (1 - COTISATIONS - MARGE_VISEE) - EMBALLAGE, 2)
+            if achat_max < 0.5:          # trop bon marché pour dégager un vrai gain
+                refus["trop bon marché"] += 1
+                continue
+            gain = round(vente * MARGE_VISEE, 2)
+            f = st["fenetre"]
+            bas = st["ic_" + f][0] or 0
+            vendues = [a for a in g_s + g_r if est_vendu(a)]
+            vendues.sort(key=lambda a: (not a.get("miniature"), -(a.get("vendu_detecte") or a.get("verifie_le") or 0)))
+            niveaux = cat.split(" > ")
+            res.append({
+                "nom": cat, "type": niveaux[-1], "chemin": " > ".join(niveaux[:-1]),
+                "regroupe": sorted(sous)[:6],      # sous-catégories regroupées (vide = catégorie précise)
+                "prix_vendu": vente, "achat_max": achat_max, "gain": gain,
+                "delai_h": st["delai_h"], "fenetre": f, "taux": st["taux_" + f], "ic": st["ic_" + f],
+                "n": st["n"], "n_utilisees": st["n_utilisees"], "vendues": st["vendues"],
+                "vendues_confirmees": st["vendues_confirmees"], "confiance": st["confiance"],
+                "a_confirmer": st["n_utilisees"] < N_FIABLE,
+                "score": round(bas / 100 * gain, 2),
+                "exemples": [exemple(a, maintenant) for a in vendues[:12]],
+            })
+        groupes.update(a_remonter)
     res.sort(key=lambda o: -o["score"])
     return {"liste": res[:N_OPPORTUNITES], "n_types": len(res), "refus": dict(refus),
             "suivies": len(s_c), "rattrapage": len(r_c), "vendues": ref["vendues"],
