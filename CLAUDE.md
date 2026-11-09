@@ -71,8 +71,10 @@
   relevé), `avant-lot1.v2.gcm` (avant le lot 1), `sauvegarde-AAAA-MM-JJ.v2.gcm` (une par jour UTC, créée par le
   premier relevé du jour OU par le workflow « Sauvegarde du jour » à 00 h 17 / 12 h 17 UTC ; jamais écrasée),
   `avant-restauration-<horodatage>.v2.gcm` (copie de sécurité faite par chaque restauration).
-  Fichiers V1 encore présents mais plus lus : `vinted.db.gz.enc`, `precedente.db.gz.enc`, `avant-lot1.db.gz.enc`
-  -> **suppression seulement après confirmation EXPLICITE et séparée de l'utilisateur**. Ne jamais supprimer de V2.
+  Les 3 fichiers V1 (`vinted.db.gz.enc`, `precedente.db.gz.enc`, `avant-lot1.db.gz.enc`) ont été SUPPRIMÉS le
+  2026-11-09 (~01 h UTC) avec l'accord explicite de l'utilisateur (opération « A »), par le workflow à usage unique
+  `supprimer-v1.yml` (run 42577706983, retiré ensuite) après vérification des 5 V2 ; SHA-256 notés dans le journal
+  (05c443f1…, 26486e5b…, d543ee30…). Ne jamais supprimer de V2.
 - **Workflows manuels** : `verifier-sauvegardes.yml` (restaure chaque *.v2.gcm, lecture seule),
   `restaurer.yml` + `restaurer.sh` (source precedente / avant-lot1 / quotidienne+date ; cible `test-temporaire`
   = Release séparée `restauration-test`, ou `production` avec confirmation RESTAURER ; vérifie GCM + SQLite,
@@ -91,8 +93,8 @@
   (run 42542374234) : 5 V2 restaurables, 3 V1 ignorées ; restauration test-temporaire de la quotidienne 2026-11-09
   (run 42542430660) OK (17 013 annonces, SHA-256 e4c56e4c…) ; Release `donnees` identique avant/après les tests ;
   `restauration-test` = 9 fichiers commençant tous par « NICHESv2 », utilisée seulement par restaurer.sh.
-  EN ATTENTE de 2 accords SÉPARÉS de l'utilisateur : (a) suppression des 3 fichiers V1, (b) suppression de la
-  Release `restauration-test`. Ne rien supprimer sans eux.
+  (a) suppression des 3 fichiers V1 : FAITE (accord « A »). (b) suppression de la Release `restauration-test` :
+  PAS autorisée (l'utilisateur n'a répondu que « A ») -> la garder ; ne la supprimer que sur accord explicite.
 - **Lot 1 (2026-11-08)** : sauvegardes chiffrées dans la Release (voir ci-dessus).
   Schéma versionné (`PRAGMA user_version` = 2, `migrer()`), table `observations` (chaque lecture, jamais écrasée),
   stats : intervalles de Wilson (`ic_*`), `confiance` (0-100 = 100 − 2 × largeur de l'intervalle), `n_utilisees`,
