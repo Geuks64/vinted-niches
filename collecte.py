@@ -122,6 +122,10 @@ def ouvrir_base():
         con.execute("ALTER TABLE annonces ADD COLUMN badge TEXT")
     if "recherche" not in cols_annonces:
         con.execute("ALTER TABLE annonces ADD COLUMN recherche INTEGER")   # n° de la recherche ciblée
+    cols_releves = [c[1] for c in con.execute("PRAGMA table_info(releves)")]
+    for col in ("requetes", "req_zoom"):         # compteur de requêtes (pilote P2, 2026-11-09)
+        if col not in cols_releves:
+            con.execute(f"ALTER TABLE releves ADD COLUMN {col} INTEGER")
     colonnes = [c[1] for c in con.execute("PRAGMA table_info(rattrapage)")]
     if "devise" not in colonnes:
         # avant le 2026-11-08 midi la devise n'était pas lue : prix inutilisables (forints, zlotys...)
@@ -416,12 +420,14 @@ class Vinted:
         self.s = cr.Session(impersonate="chrome")
         self.blocages = 0
         self.dernier = 0.0
+        self.requetes = 0          # compteur de TOUTES les requêtes Vinted du relevé (bilan P2)
 
     def get(self, chemin):
         attente = PAUSE * random.uniform(0.8, 1.3) - (time.time() - self.dernier)
         if attente > 0:
             time.sleep(attente)
         self.dernier = time.time()
+        self.requetes += 1
         try:
             r = self.s.get(BASE + chemin, headers=ENTETES, timeout=40)
         except Exception as e:
@@ -633,14 +639,16 @@ def id_pour_age(con, age_h, maintenant):
     return int(ref[1] - (ref[0] - cible) * debit_ids(con))
 
 
-def rattrapage(v, con):
+def rattrapage(v, con, limite=None):
     """Va voir des annonces publiées il y a ~1 j, ~3 j, ~7 j (numéros tirés au hasard)
-    et note tout de suite si elles sont vendues. Utilise le temps restant du relevé."""
+    et note tout de suite si elles sont vendues. Utilise le temps restant du relevé.
+    limite : nombre max de lectures (RATTRAPAGE_MAX moins les requêtes utilisées par le pilote P2)."""
+    limite = RATTRAPAGE_MAX if limite is None else limite
     if not con.execute("SELECT 1 FROM reperes LIMIT 1").fetchone():
         return 0, 0
     faits = ventes = absentes = erreurs = 0
     montres = 0
-    while faits + absentes < RATTRAPAGE_MAX and not v.bloque() and temps_restant() > 30:
+    while faits + absentes < limite and not v.bloque() and temps_restant() > 30:
         maintenant = int(time.time())
         age_vise = RATTRAPAGE_AGES_H[(faits + absentes) % len(RATTRAPAGE_AGES_H)]
         iid = id_pour_age(con, age_vise * random.uniform(0.85, 1.15), maintenant)
@@ -763,6 +771,20 @@ def compacter(con):
         log(f"Compactage : {n} anciennes annonces non suivies résumées")
 
 
+def comparer_requetes(con):
+    """Requêtes par relevé : 24 dernières heures (compteur exact) vs période d'avant le compteur (estimation :
+    accueil + 6 pages de catalogue + une lecture par observation enregistrée pendant le relevé)."""
+    maintenant = int(time.time())
+    exact = con.execute("SELECT AVG(requetes), MAX(requetes), COUNT(*) FROM releves WHERE requetes IS NOT NULL "
+                        "AND debut > ?", (maintenant - 86400,)).fetchone()
+    avant = con.execute("""SELECT AVG(7 + (SELECT COUNT(*) FROM observations o WHERE o.ts BETWEEN r.debut
+                           AND r.debut + r.duree)), COUNT(*) FROM releves r WHERE r.requetes IS NULL
+                           AND r.debut > ?""", (maintenant - 3 * 86400,)).fetchone()
+    log(f"Comparaison : {round(exact[0] or 0, 1)} requêtes/relevé en moyenne sur 24 h (max {exact[1]}, "
+        f"{exact[2]} relevés comptés) | avant le pilote (estimation) : {round(avant[0] or 0, 1)} "
+        f"({avant[1]} relevés)")
+
+
 def main():
     con = ouvrir_base()
     reclasser(con)
@@ -773,16 +795,33 @@ def main():
     vues, nouvelles = nouvelles_annonces(v, con)
     log(f"Nouvelles annonces : {nouvelles} (sur {vues} vues)")
     faits, ventes = controles(v, con)
-    r_faits, r_ventes = rattrapage(v, con)
+    # Pilote P2 (zoom automatique) : ses requêtes sont retirées du rattrapage -> total inchangé
+    import zoom
+    req_avant_zoom = v.requetes
+    try:
+        req_zoom = zoom.executer(v, con)
+    except Exception as e:                       # P2 ne doit jamais casser le relevé
+        log(f"P2 : erreur inattendue, arrêt pour ce relevé ({e!r})")
+        con.rollback()
+        req_zoom = v.requetes - req_avant_zoom
+    req_avant_ratt = v.requetes
+    r_faits, r_ventes = rattrapage(v, con, limite=max(0, RATTRAPAGE_MAX - req_zoom))
+    req_ratt = v.requetes - req_avant_ratt
     faits, ventes = faits + r_faits, ventes + r_ventes
     note = "bloqué par Vinted" if v.bloque() else ""
-    con.execute("INSERT INTO releves VALUES (?,?,?,?,?,?,?,?)",
-                (int(DEBUT), round(time.time() - DEBUT, 1), nouvelles, vues, faits, ventes, v.blocages, note))
+    con.execute("""INSERT INTO releves (debut, duree, nouvelles, vues, controles, ventes, blocages, note, requetes,
+                   req_zoom) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (int(DEBUT), round(time.time() - DEBUT, 1), nouvelles, vues, faits, ventes, v.blocages, note,
+                 v.requetes, req_zoom))
     con.commit()
+    log(f"Requêtes Vinted de ce relevé : {v.requetes} (dont P2 {req_zoom}, rattrapage {req_ratt}, "
+        f"limite du rattrapage {max(0, RATTRAPAGE_MAX - req_zoom)} au lieu de {RATTRAPAGE_MAX})")
+    comparer_requetes(con)
     en_attente = con.execute("SELECT COUNT(*) FROM annonces WHERE prochain_controle IS NOT NULL "
                              "AND prochain_controle <= ?", (int(time.time()),)).fetchone()[0]
     log(f"Contrôles en retard : {en_attente}")
     compacter(con)
+    zoom.bilan(con)
     con.close()
     if vues == 0:
         log("ÉCHEC : aucune annonce lue (Vinted a peut-être changé son site ou bloque).")

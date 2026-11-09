@@ -115,6 +115,21 @@
   Neuf que les annonces de moins de `FRAIS_H` (1 h, âge d'après le numéro ; vu_le = heure estimée de publication).
   Livres / CD / films (« Livres et médias ») : jamais « de marque » sur Vinted -> exclus des cibles (`cible.py`) et
   leur suivi s'arrête au 1er contrôle (`arreter_si_hors_cible`).
+- **P1 vérifié (2026-11-09) : volume INSUFFISANT** — `produits.py` (regroupement prudent : identique ≥ 0,60 + ≥ 2 mots
+  informatifs + même catégorie + prix ×2,5 ; similaire 0,35-0,60 jamais fusionné ; titres vagues écartés) +
+  `diag_produits.py` (diagnostic workflow « Diagnostic », test=produits, 0 requête) : 654 annonces -> 544 produits dont
+  542 à 1 annonce. L'échantillon aléatoire ne suffit pas -> P2.
+- **PILOTE P2 « zoom automatique » (autorisé le 2026-11-09, conditions STRICTES de l'utilisateur)** : `zoom.py`, appelé
+  par `collecte.main()` entre contrôles et rattrapage. Quota `NICHES_ZOOM` = 10 requêtes/relevé, FIXE (aucun passage
+  à 20/30 sans nouvel accord ; 0 = désactivé). Le rattrapage perd exactement les requêtes utilisées par P2
+  (`limite = RATTRAPAGE_MAX − req_zoom`). Compteur `Vinted.requetes` -> colonnes `releves.requetes` / `req_zoom` +
+  `comparer_requetes()` (24 h exactes vs estimation d'avant). Découverte 3 jours (`zoom_etat.debut`), puis les produits
+  terminent leurs passages (24 h / 3 j / 7 j) avant le bilan final (~10 jours). Une annonce absente d'une recherche =
+  « disparue », JAMAIS vendue : page lue -> vendu_probable / vendu (confirmation 12 h) / supprime / masque / reserve /
+  indisponible / indetermine / autre_categorie / en_vente (fausse disparition). 403/429 -> P2 s'arrête + pause 6 h ;
+  erreur réseau / réponse inhabituelle -> arrêt pour le relevé. Tables `zoom_etat`, `zoom_produits`, `zoom_annonces`,
+  `zoom_journal` (même base chiffrée, rien changé au chiffrement / sauvegardes / workflows). Bilan dans le journal de
+  chaque relevé (`zoom.bilan`). PAS d'écran final avant validation des résultats par l'utilisateur.
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).
