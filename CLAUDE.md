@@ -141,6 +141,16 @@
   3e relevé (11 h 02 UTC) : 1 suivi sur 10 (« call duty black », jeu vidéo) ; 85-90 % des résultats de requêtes
   génériques (« veste marron ») sont de marque -> jeux vidéo exclus des cibles (`CATEGORIES_EXCLUES`) et produits déjà
   suivis dans une catégorie exclue arrêtés ; mots « qui reviennent » cherchés parmi les titres NEUFS SANS MARQUE.
+  4e relevé (11 h 45 UTC) : 0 candidat (les ventes observées ne se répètent pas) -> **découverte par l'OFFRE**
+  (validée par l'utilisateur le 2026-11-09 ~16 h UTC) : `collecte.lire_cartes` lit l'identifiant du vendeur,
+  `zoom.memoriser_offre` garde les cartes neuves sans marque du relevé normal (table `zoom_offre`, 7 j, 0 requête).
+  Candidat = 2-3 mots caractéristiques (mots dans > 5 % des titres ignorés ; 3e mot seulement si ≥ 80 % des vendeurs)
+  publiés par ≥ 4 vendeurs DIFFÉRENTS en 72 h (republications d'un même vendeur = 1), prix médian ≥ 8 €, variantes
+  du même produit fusionnées (mêmes annonces / 2 mots sur 3). Une fréquence de publication N'EST PAS une preuve de
+  demande : elle sert seulement à choisir quoi rechercher. Catégorie devinée (sinon « inconnue », fixée par la 1re
+  annonce vérifiée ; famille différente sur 2 niveaux = autre_categorie ; livres / jeux vidéo = categorie_exclue,
+  produit arrêté dès 2). Aucun candidat -> 0 requête. Bilan intermédiaire demandé le 12/11 (ventes à 7 j NON
+  définitives tant que les produits sont en observation), bilan final après la fin des 7 jours de suivi.
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

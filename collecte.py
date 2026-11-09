@@ -252,6 +252,9 @@ def lire_cartes(html):
             "favoris0": c.get("favouriteCount") or 0,
             "badge": texte_badge(box.get("badge")),
             "pro": 1 if (c.get("user") or {}).get("isBusiness") else 0,
+            # identifiant du vendeur (sert au pilote P2 : vendeurs DIFFÉRENTS d'un même produit)
+            "vendeur": (str((c.get("user") or {}).get("id")) if isinstance(c.get("user"), dict)
+                        and (c.get("user") or {}).get("id") not in (None, "", "$undefined") else None),
             "miniature": c.get("thumbnailUrl"),
             "url": c.get("url"),
         })
@@ -497,6 +500,11 @@ def nouvelles_annonces(v, con):
                 {**c, "vu_le": vu_le, "suivi": suivi,
                  "prochain": vu_le + CONTROLES_H[0] * 3600 if suivi else None})
             nouvelles += cur.rowcount
+        try:                                     # offre neuve sans marque pour le pilote P2 (0 requête)
+            import zoom
+            zoom.memoriser_offre(con, cartes, maintenant)
+        except Exception as e:
+            log(f"  P2 offre non mémorisée ({e!r})")
         con.commit()
         badges = [c["badge"] for c in cartes if c["badge"]]
         log(f"Catalogue {liste} page {page} : {len(cartes)} annonces"

@@ -49,6 +49,10 @@ OUBLI_J = 14                      # une requête (ou une requête presque identi
 PAUSE_BLOCAGE_H = 6
 CONFIRMATION_H = 12
 VENDEUR_MAX = 3                   # annonces d'un même vendeur dans un produit (au plus)
+# Découverte par l'OFFRE (validée par l'utilisateur le 2026-11-09, remplace la découverte par les ventes) :
+FENETRE_OFFRE_H = 72              # nouvelles annonces neuves sans marque prises en compte (déjà lues par le relevé)
+VENDEURS_MIN = 4                  # un produit candidat doit être publié par au moins 4 vendeurs DIFFÉRENTS
+PART_MOT_MAX = 0.05               # un mot présent dans plus de 5 % des titres est trop général (robe, pull…)
 log = collecte.log
 
 
@@ -77,7 +81,24 @@ def creer_tables(con):
     CREATE TABLE IF NOT EXISTS zoom_journal (
         ts INTEGER, produit_id INTEGER, type TEXT, http INTEGER, note TEXT
     );
+    -- Offre : nouvelles annonces NEUVES SANS MARQUE vues par le relevé normal, avec leur vendeur (0 requête de plus)
+    CREATE TABLE IF NOT EXISTS zoom_offre (
+        annonce_id INTEGER PRIMARY KEY, vu_le INTEGER, titre TEXT, prix REAL, vendeur TEXT, pro INTEGER
+    );
     """)
+    cols = [c[1] for c in con.execute("PRAGMA table_info(zoom_produits)")]
+    for col, typ in (("source", "TEXT"), ("vendeurs_offre", "INTEGER"), ("annonces_offre", "INTEGER")):
+        if col not in cols:
+            con.execute(f"ALTER TABLE zoom_produits ADD COLUMN {col} {typ}")
+
+
+def memoriser_offre(con, cartes, maintenant):
+    """Appelé par collecte.nouvelles_annonces() : garde les cartes neuves sans marque déjà lues (aucune requête)."""
+    creer_tables(con)
+    con.executemany("INSERT OR IGNORE INTO zoom_offre VALUES (?,?,?,?,?,?)",
+                    [(c["id"], maintenant, c["titre"], c["prix"], c.get("vendeur"), c.get("pro"))
+                     for c in cartes if est_cible(c)])
+    con.execute("DELETE FROM zoom_offre WHERE vu_le < ?", (maintenant - 7 * 86400,))
 
 
 def etat(con, cle, defaut=None):
@@ -215,50 +236,86 @@ def journal(con, produit_id, type_, http, note=""):
 
 
 # ---------------------------------------------------------------- 1. candidats (aucune requête)
+def categories_connues(con):
+    """(mots du titre, catégorie) des annonces dont la catégorie est connue : sert à deviner la catégorie d'un
+    candidat (pour répartir les recherches entre catégories)."""
+    return [(produits.mots(t), c) for t, c in con.execute(
+        """SELECT titre, categorie FROM annonces WHERE categorie IS NOT NULL UNION ALL
+           SELECT titre, categorie FROM rattrapage WHERE categorie IS NOT NULL""")]
+
+
 def candidats(con, maintenant, idf, idf_max, index):
+    """Produits candidats = combinaisons de 2 ou 3 mots caractéristiques présentes dans les nouvelles annonces
+    neuves sans marque d'au moins VENDEURS_MIN vendeurs DIFFÉRENTS (72 dernières heures, 0 requête).
+    - un même vendeur ne compte qu'une fois par produit (doublons et republications) ;
+    - les mots trop généraux (présents dans plus de 5 % des titres) sont ignorés ;
+    - une fréquence de publication élevée N'EST PAS une preuve de demande : elle sert seulement à choisir quoi
+      rechercher ; la demande sera mesurée par les ventes vérifiées.
+    Aucun candidat sérieux -> liste vide -> 0 requête (le quota retourne au rattrapage)."""
+    lignes = con.execute("""SELECT titre, prix, vendeur FROM zoom_offre WHERE vu_le > ? AND vendeur IS NOT NULL""",
+                         (maintenant - FENETRE_OFFRE_H * 3600,)).fetchall()
+    # republications : même vendeur + même titre = une seule annonce
+    uniques = {(v, simplifier(t)): (t, p, v) for t, p, v in lignes}
+    annonces = [(produits.mots(t), t, p, v) for t, p, v in uniques.values()]
+    if len(annonces) < 50:
+        return []
+    df = Counter(m for jeu, *_ in annonces for m in jeu)
+    general = {m for m, c in df.items() if c / len(annonces) > PART_MOT_MAX}
+    paires = {}
+    for i, (jeu, _, _, v) in enumerate(annonces):
+        info = sorted(m for m in jeu if m not in general and len(m) > 2)
+        for combi in combinations(info, 2):
+            paires.setdefault(combi, {}).setdefault(v, i)        # vendeur -> une de ses annonces
+    graines = []
     recents = con.execute("SELECT requete, coeur FROM zoom_produits WHERE cree_le > ?",
                           (maintenant - OUBLI_J * 86400,)).fetchall()
     deja = {r[0] for r in recents}
     coeurs_deja = [set(json.loads(r[1] or "[]")) for r in recents]
-    graines = []
-    for r in con.execute("""SELECT id, titre, marque, etat, categorie, COALESCE(prix_final, prix) AS prix,
-                                   vendu_avant_h AS vitesse_h, favoris, 'suivi' AS source
-                            FROM annonces WHERE suivi = 1 AND statut IN ('vendu', 'vendu_probable')
-                            AND categorie IS NOT NULL
-                            UNION ALL
-                            SELECT id, titre, marque, etat, categorie, prix, age_h, favoris, 'rattrapage'
-                            FROM rattrapage WHERE statut IN ('vendu', 'vendu_probable') AND categorie IS NOT NULL"""):
-        a = dict(zip(("id", "titre", "marque", "etat", "categorie", "prix", "vitesse_h", "favoris", "source"), r))
-        if not est_cible(a) or (a["prix"] or 0) < PRIX_MIN:
+    connues = None
+    retenues = []                                       # annonces de chaque candidat déjà retenu (anti-doublon)
+    for paire, par_vendeur in sorted(paires.items(), key=lambda x: (-len(x[1]), x[0])):
+        if len(par_vendeur) < VENDEURS_MIN:
+            break
+        # 3e mot commun à au moins VENDEURS_MIN vendeurs : produit plus précis
+        idx = [i for i, (jeu, *_r) in enumerate(annonces) if set(paire) <= jeu]
+        trois = Counter()
+        for m in {m for i in idx for m in annonces[i][0]} - set(paire) - general:
+            vend = {annonces[i][3] for i in idx if m in annonces[i][0]}
+            # 3e mot seulement s'il est présent chez au moins 80 % des vendeurs de la paire (sinon il découpe
+            # le produit au lieu de le préciser, ex. « 16 couleurs » sur une partie des lampes)
+            if len(vend) >= max(VENDEURS_MIN, 0.8 * len(par_vendeur)) and len(m) > 2:
+                trois[m] = len(vend)
+        coeur = set(paire) | ({sorted(trois.items(), key=lambda x: (-x[1], x[0]))[0][0]} if trois else set())
+        # même produit qu'un candidat déjà retenu ou déjà recherché : au moins 2 mots sur 3 en commun
+        if any(len(coeur & c) >= min(len(coeur), len(c), 2) and len(coeur & c) >= 0.66 * min(len(coeur), len(c))
+               for c in coeurs_deja):
             continue
-        # mots caractéristiques (rares) mais qui REVIENNENT dans au moins 2 titres (pas les mots uniques à cette
-        # annonce, qui donnaient des recherches sans résultat) ; corrigé le 2026-11-09
-        ordre = mots_ordonnes(a["titre"])
-        info = [m for m in ordre if idf.get(m, idf_max) >= SEUIL_INFO and len(index.get(m, ())) >= 2]
-        meilleurs = sorted(info, key=lambda m: -idf.get(m, idf_max))[:5]
-        garder = None
-        for k in (3, 2):                           # combinaison de 3 (sinon 2) mots présents ENSEMBLE dans ≥ 2 titres
-            for combi in combinations(meilleurs, k):
-                if len(set.intersection(*(index[m] for m in combi))) >= 2:
-                    garder = set(combi)
-                    break
-            if garder:
-                break
-        if not garder:
+        ids_coeur = {i for i in idx if coeur <= annonces[i][0]}
+        if any(len(ids_coeur & r) >= 0.5 * min(len(ids_coeur), len(r)) for r in retenues):
+            continue                                   # mêmes annonces qu'un candidat déjà retenu = même produit
+        concernees = [annonces[i] for i in sorted(ids_coeur)]
+        vendeurs = {a[3] for a in concernees}
+        prix = produits.mediane([a[2] for a in concernees])
+        if len(vendeurs) < VENDEURS_MIN or (prix or 0) < PRIX_MIN:
             continue
-        requete = " ".join(m for m in ordre if m in garder)
-        # cœur du produit = les mots de la requête (corrigé le 2026-11-09 : tout le titre de l'annonce d'origine
-        # rendait la comparaison trop stricte, 0 à 3 % de résultats « identiques » au 1er relevé du pilote)
-        coeur = set(garder)
-        if requete in deja or any(score(coeur, c, idf, idf_max) >= produits.SEUIL_IDENTIQUE for c in coeurs_deja):
+        exemple = Counter(a[1] for a in concernees).most_common(1)[0][0]
+        requete = " ".join(m for m in mots_ordonnes(exemple) if m in coeur) or " ".join(sorted(coeur))
+        if requete in deja:
             continue
-        v = a["vitesse_h"]
-        priorite = (3 if v is not None and v <= 24 else 2 if v is not None and v <= 72 else 1) + \
-            min(2.0, (a["favoris"] or 0) / 10)
-        graines.append({**a, "requete": requete, "coeur": sorted(coeur), "priorite": priorite,
-                        "racine": a["categorie"].split(" > ")[0]})
+        if connues is None:
+            connues = categories_connues(con)
+        cats = Counter(c for jeu, c in connues if coeur <= jeu)
+        categorie = cats.most_common(1)[0][0] if cats else "inconnue"
+        if categorie.startswith(CATEGORIES_EXCLUES):
+            continue
+        graines.append({"id": None, "titre": exemple, "prix": prix, "categorie": categorie,
+                        "racine": categorie.split(" > ")[0], "requete": requete, "coeur": sorted(coeur),
+                        "priorite": len(vendeurs), "vendeurs": len(vendeurs), "annonces": len(concernees)})
         deja.add(requete)
         coeurs_deja.append(coeur)
+        retenues.append(ids_coeur)
+        if len(graines) >= 60:
+            break
     return graines
 
 
@@ -334,6 +391,8 @@ def sonder(b, con, g, idf, idf_max):
          maintenant, "abandonne" if raison else "suivi", raison, mode, total, len(cartes), len(idents),
          round(part, 3), prix_med, None if raison else maintenant + PASSAGES_H[0] * 3600))
     pid = cur.lastrowid
+    con.execute("UPDATE zoom_produits SET source = 'offre', vendeurs_offre = ?, annonces_offre = ? WHERE id = ?",
+                (g.get("vendeurs"), g.get("annonces"), pid))
     journal(con, pid, "sondage", r.status_code, raison or "suivi")
     if not raison:
         age_de = lambda iid: round(collecte.id_vers_age(con, iid, maintenant), 1)
@@ -342,11 +401,13 @@ def sonder(b, con, g, idf, idf_max):
         ajout = ajouter_annonces(con, pid, idents, vendeurs, coeur, g["prix"], idf, idf_max, maintenant, age_de,
                                  limite=ECHANTILLON if mode == "echantillon" else None)
         vus = sum(1 for c in cartes if vendeurs.get(c["id"]))
-        log(f"  P2 sondage « {g['requete']} » ({g['categorie']}) : {total} en ligne, {len(idents)}/{len(cartes)} "
+        log(f"  P2 sondage « {g['requete']} » ({g['categorie']}, publié par {g.get('vendeurs')} vendeurs en "
+            f"{FENETRE_OFFRE_H} h) : {total} en ligne, {len(idents)}/{len(cartes)} "
             f"identiques, prix médian {prix_med} € -> SUIVI ({mode}, {ajout} annonces ; vendeur lisible sur "
             f"{vus}/{len(cartes)} cartes)")
     else:
-        log(f"  P2 sondage « {g['requete']} » ({g['categorie']}) : {total} en ligne -> abandonné : {raison}"
+        log(f"  P2 sondage « {g['requete']} » ({g['categorie']}, {g.get('vendeurs')} vendeurs) : {total} en ligne "
+            f"-> abandonné : {raison}"
             + (f" | écartées : {dict(raisons)}" if raisons else ""))
     con.commit()
     return True
@@ -420,9 +481,14 @@ def verifier(b, con, pid, aid, ancien, categorie_produit):
             statut = "vendu" if s in collecte.ETATS_VENDU else ("en_vente" if s in ("en_vente", "reserve") else ancien)
         else:
             statut = s
-        if cat and categorie_produit and cat != categorie_produit and not cat.startswith(CATEGORIES_EXCLUES):
-            if statut not in ("supprime",):
-                statut = "autre_categorie"           # prudence : une autre catégorie = pas le même produit
+        if cat and cat.startswith(CATEGORIES_EXCLUES) and statut != "supprime":
+            statut = "categorie_exclue"              # livres / CD / jeux vidéo : hors sujet
+        elif cat and categorie_produit and statut != "supprime":
+            if categorie_produit == "inconnue":      # 1re catégorie lue = catégorie du produit
+                con.execute("UPDATE zoom_produits SET categorie = ?, racine = ? WHERE id = ?",
+                            (cat, cat.split(" > ")[0], pid))
+            elif cat.split(" > ")[:2] != categorie_produit.split(" > ")[:2]:
+                statut = "autre_categorie"           # prudence : une autre famille d'articles = pas le même produit
     fausse = 1 if ancien == "disparue" and statut in ("en_vente", "reserve") else 0
     con.execute("""UPDATE zoom_annonces SET statut = ?, verifie_le = ?, categorie = COALESCE(?, categorie),
         prix_vente = CASE WHEN ? IN ('vendu', 'vendu_probable') THEN COALESCE(?, prix_vente, prix) ELSE prix_vente END,
@@ -456,6 +522,9 @@ def executer(v, con):
     for prefixe in CATEGORIES_EXCLUES:
         con.execute("""UPDATE zoom_produits SET statut = 'abandonne', raison = 'catégorie exclue', prochain_passage = NULL
                        WHERE statut = 'suivi' AND categorie LIKE ?""", (prefixe + "%",))
+    con.execute("""UPDATE zoom_produits SET statut = 'abandonne', raison = 'catégorie exclue', prochain_passage = NULL
+                   WHERE statut = 'suivi' AND id IN (SELECT produit_id FROM zoom_annonces
+                   WHERE statut = 'categorie_exclue' GROUP BY produit_id HAVING COUNT(*) >= 2)""")
     b = Budget(v, con, QUOTA)
     idf, idf_max, index = calculer_idf(con)
     cats = dict(con.execute("SELECT id, categorie FROM zoom_produits"))
@@ -488,6 +557,12 @@ def executer(v, con):
     graines = []
     if maintenant < debut + DECOUVERTE_J * 86400:
         graines = candidats(con, maintenant, idf, idf_max, index)
+        offre = con.execute("SELECT COUNT(*), COUNT(DISTINCT vendeur) FROM zoom_offre WHERE vu_le > ?",
+                            (maintenant - FENETRE_OFFRE_H * 3600,)).fetchone()
+        log(f"P2 offre : {offre[0]} annonces neuves sans marque ({offre[1]} vendeurs) sur {FENETRE_OFFRE_H} h -> "
+            f"{len(graines)} produits candidats (≥ {VENDEURS_MIN} vendeurs)"
+            + "".join(f"\n    · « {g['requete']} » : {g['vendeurs']} vendeurs, {g['annonces']} annonces, "
+                      f"{g['prix']} € ({g['categorie']})" for g in graines[:8]))
         while b.reste() > 0 and graines:
             g = choisir(con, graines, int(time.time()))
             if g is None:
@@ -541,6 +616,17 @@ def bilan(con):
         f"{time.strftime('%d/%m %H:%M', time.gmtime(debut + DECOUVERTE_J * 86400))})")
     log(f"  Produits sondés : {sum(st.values())} | suivis : {st['suivi']} | terminés : {st['termine']} | "
         f"abandonnés : {st['abandonne']} {dict(raisons)}")
+    o = con.execute("""SELECT COUNT(*), AVG(vendeurs_offre), MIN(vendeurs_offre), MAX(vendeurs_offre),
+                       SUM(statut != 'abandonne') FROM zoom_produits WHERE source = 'offre'""").fetchone()
+    log(f"  Méthode « offre » : {o[0]} recherches, vendeurs différents par candidat : moyenne "
+        f"{round(o[1] or 0, 1)} (min {o[2]}, max {o[3]}) | retenus : {o[4] or 0}")
+    for req, ven, ann, sta, rai, tot, ide, nc, pm in con.execute(
+            """SELECT requete, vendeurs_offre, annonces_offre, statut, raison, total, n_identiques, n_cartes,
+               prix_median FROM zoom_produits WHERE source = 'offre' ORDER BY id DESC LIMIT 15"""):
+        log(f"    - « {req} » : {ven} vendeurs / {ann} annonces dans l'offre | recherche : {tot} en ligne, "
+            f"{ide}/{nc} identiques, {pm} € -> {sta}{' (' + rai + ')' if rai else ''}")
+    encours = con.execute("""SELECT COUNT(*) FROM zoom_produits WHERE statut = 'suivi'""").fetchone()[0]
+    log(f"  ⚠️ {encours} produit(s) encore en observation : leurs ventes à 7 jours NE SONT PAS définitives.")
     log(f"  Résultats identiques : {round(100 * (part[0] or 0))} % en moyenne ({part[1] or 0} / {part[2] or 0} cartes)")
     log(f"  Annonces suivies : {sum(a.values())} {dict(a)}")
     log(f"  Ventes : {a['vendu']} confirmées, {a['vendu_probable']} probables | fausses disparitions : "
