@@ -187,6 +187,8 @@ dialog#chine::backdrop { background: rgba(0,0,0,.45); }
   background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 10px 6px;
 }
 .liens-chine a.photo { grid-column: 1 / -1; background: var(--accent); border-color: var(--accent); color: #fff; }
+.liens-chine a.photo.demi { grid-column: auto; }
+.liens-chine a.large { grid-column: 1 / -1; }
 .champs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
 .champs label { font-size: 12.5px; color: var(--texte-2); display: flex; flex-direction: column; gap: 3px; }
 .champs input, .mots {
@@ -385,7 +387,10 @@ th { color: var(--texte-2); font-weight: 600; }
     <input class="mots" id="chine-mots" aria-label="Mots-clés de recherche">
     <p class="petit avert-marque" id="chine-marque" hidden></p>
     <div class="liens-chine" id="chine-liens"></div>
-    <p class="petit">La recherche <b>par photo</b> est souvent la plus efficace.</p>
+    <p class="petit">La recherche <b>par photo</b> est souvent la plus efficace. Google Lens, Bing et Yandex montrent
+      aussi les offres AliExpress, Temu, Alibaba… <b>Photo directement dans AliExpress ou Temu</b> : « 📥 Ouvrir la photo »,
+      appui long sur la photo › <b>Ajouter à Photos</b>, puis dans l'appli AliExpress ou Temu touche l'icône 📷 de la
+      barre de recherche et choisis cette photo.</p>
     <h2>3. Calculer la marge</h2>
     <div class="champs">
       <label>Prix de vente Vinted (€)<input id="m-vente" type="number" inputmode="decimal" step="0.01" min="0"></label>
@@ -803,11 +808,16 @@ $("#vinted-analyser").addEventListener("click", (e) => {
 function liensChine() {
   const q = $("#chine-mots").value.trim(), e = encodeURIComponent(q), a = annonceChine;
   const liens = [];
-  if (a.miniature) liens.push(["photo", "📷 Recherche par photo (Google Lens)", `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(a.miniature)}`]);
+  // Recherche par photo : seuls ces moteurs acceptent une photo par lien (AliExpress, Temu… exigent un envoi de fichier).
+  const img = encodeURIComponent(a.miniature || "");
+  if (a.miniature) liens.push(["photo", "📷 Recherche par photo (Google Lens)", `https://lens.google.com/uploadbyurl?url=${img}`],
+                               ["photo demi", "📷 Photo · Bing", `https://www.bing.com/images/search?view=detailv2&iss=sbi&form=SBIVSP&q=imgurl:${img}`],
+                               ["photo demi", "📷 Photo · Yandex", `https://yandex.com/images/search?rpt=imageview&url=${img}`]);
   liens.push(["", "AliExpress", `https://fr.aliexpress.com/w/wholesale-${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`]);
   liens.push(["", "Temu", `https://www.temu.com/fr/search_result.html?search_key=${e}`]);
   liens.push(["", "Alibaba", `https://www.alibaba.com/trade/search?SearchText=${e}`]);
   liens.push(["", "DHgate", `https://www.dhgate.com/wholesale/search.do?searchkey=${e}`]);
+  if (a.miniature) liens.push(["large", "📥 Ouvrir la photo (à enregistrer)", a.miniature]);
   $("#chine-liens").innerHTML = liens.map(([c, t, u]) => `<a class="${c}" href="${esc(u)}" target="_blank" rel="noopener">${t}</a>`).join("");
 }
 function calculerMarge() {
