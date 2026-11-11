@@ -800,6 +800,7 @@ function liensChine() {
   liens.push(["", "AliExpress", `https://fr.aliexpress.com/w/wholesale-${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`]);
   liens.push(["", "Temu", `https://www.temu.com/fr/search_result.html?search_key=${e}`]);
   liens.push(["", "Alibaba", `https://www.alibaba.com/trade/search?SearchText=${e}`]);
+  liens.push(["", "DHgate", `https://www.dhgate.com/wholesale/search.do?searchkey=${e}`]);
   $("#chine-liens").innerHTML = liens.map(([c, t, u]) => `<a class="${c}" href="${esc(u)}" target="_blank" rel="noopener">${t}</a>`).join("");
 }
 function calculerMarge() {
