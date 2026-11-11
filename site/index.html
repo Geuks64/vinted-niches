@@ -754,11 +754,17 @@ const SANS_MARQUE = ["(sans marque)", "no label", "sans marque", "none", "autre"
                      "inconnu", "unbranded", "no brand", "generique", "generic", "sans"];
 const simple = (t) => String(t ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 const aUneMarque = (a) => !!a.marque && !SANS_MARQUE.includes(simple(a.marque)) && simple(a.marque) !== simple(a.titre);
+// \b ne marche pas avec les accents (« état ») : on borne les mots à la main.
+const mots = (liste) => new RegExp(`(?<![\\p{L}\\d])(?:${liste})(?![\\p{L}\\d])`, "giu");
+const INUTILES = mots("taille|size|größe|talla|taglia|maat|tbe|très bon état|bon état|état neuf|comme neuf|neuf|neuve|neufs|neuves|new|brand new|nuov[oaie]|nuev[oa]s?|neu|" +
+  "avec étiquettes?|sans étiquettes?|étiquettes?|with tags?|jamais portée?s?|portée?s? (?:une|1|2|deux) fois|never worn|" +
+  "vintage|original|authentique|vendu|lot de|made in \\p{L}+|fabriqué en \\p{L}+|prix|urgent|promo|top");
+const TAILLES = mots("xxs|xs|s|m|l|xl|xxl|xxxl|small|medium|large|petit|moyen|grand|\\d{1,3}\\s?(?:cm|mm|ans|mois)|eu\\s?\\d+|\\d{2}(?:[.,]5)?");
 function nettoyer(t) {
   return String(t || "")
-    .replace(/\b(taille|size|neuf|neuve|new|tbe|très bon état|bon état|avec étiquette|sans étiquette|vintage|original|authentique|vendu|lot de)\b/gi, " ")
-    .replace(/\b(xxs|xs|s|m|l|xl|xxl|xxxl|small|medium|large|petit|moyen|grand|\d{1,3}\s?(cm|mm|ans|mois)|eu\s?\d+|\d{2}(?:[.,]5)?)\b/gi, " ")
-    .replace(/[|·•,;:!?()\[\]\/#*+"]/g, " ").replace(/\s+/g, " ").trim();
+    .replace(/[^\p{L}\p{N}\s'-]/gu, " ")   // ponctuation, points, émojis
+    .replace(INUTILES, " ").replace(TAILLES, " ")
+    .replace(/(?<=\s|^)[-']+|[-']+(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();
 }
 function motsCles(a, mode) {
   const typeProduit = String(a.categorie || "").split(" > ").pop() || "";
@@ -776,7 +782,8 @@ function motsCles(a, mode) {
   if (t.split(" ").filter((m) => m.length > 2).length < 2 && typeProduit && !t.toLowerCase().includes(typeProduit.toLowerCase())) {
     t = `${typeProduit} ${t}`.trim();
   }
-  return t;
+  // les sites chinois ne trouvent rien avec une phrase entière : 6 mots maximum
+  return t.split(" ").slice(0, 6).join(" ");
 }
 // Annonces du même produit sur Vinted (recherche par mots-clés, marque comprise)
 function liensVinted() {
