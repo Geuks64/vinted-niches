@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       test:
-        description: "produits = volume par produit (sans requête Vinted) ; prix ; catalogue"
+        description: "offre = test des réglages P2 (sans requête Vinted) ; produits ; prix ; catalogue"
         type: choice
-        options: [produits, prix, catalogue]
-        default: produits
+        options: [offre, produits, prix, catalogue]
+        default: offre
 permissions:
   contents: read
   actions: read
