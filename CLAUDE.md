@@ -151,6 +151,12 @@
   annonce vérifiée ; famille différente sur 2 niveaux = autre_categorie ; livres / jeux vidéo = categorie_exclue,
   produit arrêté dès 2). Aucun candidat -> 0 requête. Bilan intermédiaire demandé le 12/11 (ventes à 7 j NON
   définitives tant que les produits sont en observation), bilan final après la fin des 7 jours de suivi.
+- **PILOTE P2 ARRÊTÉ le 2026-11-11 (choix de l'utilisateur)** : `NICHES_ZOOM` par défaut = 0 (aucune requête P2, le
+  rattrapage récupère tout son budget ; plafond de requêtes conservé). Raison : test `diag_offre.py` (run 42998591824,
+  0 requête) sur 5 083 annonces neuves sans marque / 4 615 vendeurs en 72 h -> réglages actuels = 24 candidats tous
+  vagues (« sac main », « robe noire »), réglages stricts (3 mots, ≥ 6 vendeurs, sans marque) = 0 candidat. Le volume
+  observé ne permet pas de détecter des produits précis. Écran principal conservé : Opportunités (par type).
+  Tables zoom_* et code gardés (aucune donnée supprimée). Ne pas réactiver sans accord.
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).

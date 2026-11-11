@@ -35,7 +35,7 @@ import collecte
 import produits
 from cible import CATEGORIES_EXCLUES, est_cible, simplifier
 
-QUOTA = int(os.environ.get("NICHES_ZOOM", "10"))
+QUOTA = int(os.environ.get("NICHES_ZOOM", "0"))   # pilote P2 ARRÊTÉ le 2026-11-11 (décision de l'utilisateur)
 DECOUVERTE_J = 3                  # jours pendant lesquels de nouveaux produits sont sondés
 PASSAGES_H = [24, 72, 168]        # relectures de la recherche après le sondage
 PRIX_MIN = 8.0                    # prix de vente minimum d'un candidat (sinon marge impossible)
