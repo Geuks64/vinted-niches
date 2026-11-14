@@ -893,7 +893,10 @@ async function charger() {
     $("#maj").textContent = "Pas encore de données : le premier relevé n'est pas terminé.";
     return;
   }
-  $("#maj").textContent = `Mis à jour ${quand(S.genere_le)}` + (S.depuis ? ` · relevé lancé ${quand(S.depuis)}` : "");
+  // « dernier relevé » = le plus récent ; « en route depuis » = 1er relevé de l'outil (ancien libellé trompeur)
+  const dernier = (S.releves || [])[0];
+  $("#maj").textContent = `Mis à jour ${quand(S.genere_le)}` + (dernier ? ` · dernier relevé ${quand(dernier.debut)}` : "")
+    + (S.depuis ? ` · outil en route depuis ${Math.round((Date.now() / 1000 - S.depuis) / 86400)} j` : "");
   afficherTout();
   chargerRecherchesDirectes().then(afficherRecherches);
 }
