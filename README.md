@@ -23,8 +23,9 @@ et calcule quelles **catégories / marques / tranches de prix** se vendent le pl
    - **❤️ Plus aimées** : annonces qui reçoivent le plus de « j'aime » par jour, vendues ou non ;
    - **💰 Ventes**, **Détails** (tous les regroupements), **Relevé** (état technique) ;
    - bascule **Europe / France** (vendeurs français seulement).
-4. **🇨🇳 Trouver en Chine** (sur chaque annonce) : recherche par photo (Google Lens) et par mots sur AliExpress,
-   Temu, Alibaba, 1688, DHgate + calcul de marge (prix d'achat, livraison, emballage, cotisations, quantité →
+4. **🇨🇳 Trouver en Chine** (sur chaque annonce) : recherche par photo (Google Lens, Bing, Yandex),
+   par mots sur AliExpress, Temu, Alibaba, DHgate (mots nettoyés, 6 max), bouton « Ouvrir la photo » pour la
+   chercher dans les applis AliExpress / Temu (ces sites n'acceptent pas une photo par lien) + calcul de marge (prix d'achat, livraison, emballage, cotisations, quantité →
    marge par pièce, rentabilité, prix de vente minimum). Tout se passe dans le navigateur (rien n'est envoyé).
 5. **🔎 Recherche « Est-ce que ça se vend ? »** (`recherche.py`, workflow `recherche.yml`) : depuis l'onglet
    Recherche, « Analyser » ouvre une issue GitHub « Recherche : … » ; le workflow répond dans l'issue
