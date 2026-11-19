@@ -318,6 +318,13 @@ th { color: var(--texte-2); font-weight: 600; }
       <input id="texte-recherche" type="search" placeholder="Ex. Nike Tech Fleece, Lego Star Wars…" aria-label="Produit à analyser" required>
       <button class="bouton" type="submit">Analyser</button>
     </form>
+    <!-- Vinted n'a pas de recherche par photo sur le web : la photo part chez Google Lens, qui montre les annonces Vinted qui se ressemblent -->
+    <form class="recherche-form" id="form-photo" action="https://lens.google.com/v3/upload?hl=fr" method="post" enctype="multipart/form-data">
+      <label class="bouton" style="flex:1;text-align:center">📷 Chercher par photo sur Vinted
+        <input id="photo-vinted" name="encoded_image" type="file" accept="image/*" hidden></label>
+    </form>
+    <p class="petit" style="margin-top:0">Choisis ou prends une photo : Google Lens s'ouvre. Dans sa barre, écris <b>vinted</b>
+      pour ne garder que les annonces Vinted.</p>
     <details class="aide" open>
       <summary>Comment ça marche ?</summary>
       <p>« Analyser » ouvre une page GitHub déjà remplie : appuie sur <b>Create</b> (ou « Submit new issue »).
@@ -654,6 +661,8 @@ $("#form-recherche").addEventListener("submit", (e) => {
   e.preventDefault();
   lancerAnalyse($("#texte-recherche").value.trim());
 });
+// photo choisie : envoi direct à Google Lens (même onglet : Safari bloque les nouveaux onglets ouverts sans appui)
+$("#photo-vinted").addEventListener("change", (e) => { if (e.target.files.length) $("#form-photo").submit(); });
 // Analyse « Est-ce que ça se vend ? » : page GitHub pré-remplie (bouton Create) puis suivi du résultat ici
 function lancerAnalyse(t) {
   if (!t) return;
