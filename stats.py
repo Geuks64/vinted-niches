@@ -71,6 +71,21 @@ def confiance(n_elig, bas, haut):
     return max(0, min(100, round(100 - 2 * (haut - bas))))
 
 
+def taux_7j_estime(l, ref):
+    """Taux de vente ramené à 7 jours (la fenêtre 7 j n'est pas toujours disponible).
+    On projette la part INVENDUE (pas la part vendue) : si 20 % restent invendus à 3 j et qu'en moyenne la moitié
+    des invendus à 3 j trouvent preneur avant 7 j, il en reste 10 % -> 90 %. Ne dépasse jamais 100 %
+    (avant le 19/11 : taux × ratio moyen, d'où « 112,8 % vendus en 7 j »)."""
+    for f in ("7j", "3j", "24h"):
+        t, r_f = l["taux_" + f], ref["taux_" + f]
+        if t is not None and r_f:
+            r_7 = ref["taux_7j"] or r_f
+            if r_f >= 100:
+                return t
+            return 100 - (100 - t) * (100 - r_7) / (100 - r_f)
+    return None
+
+
 def segment_stats(lignes, maintenant, ratt=()):
     """lignes : annonces suivies (dict) ; ratt : annonces du rattrapage. Renvoie les indicateurs du segment.
     Les annonces supprimées / masquées / indisponibles / illisibles sont EXCLUES (ni vendues ni invendues)."""
@@ -306,12 +321,7 @@ def calculer_vue(suivies, ratt, maintenant, offre):
     top = []
     for nom_seg in ("produit", "categorie_large", "marque"):
         for l in segments[nom_seg]:
-            # taux de vente ramené à 7 jours (la fenêtre 7 j n'est pas toujours disponible)
-            t7 = None
-            for f in ("7j", "3j", "24h"):
-                if l["taux_" + f] is not None and ref["taux_" + f]:
-                    t7 = l["taux_" + f] * (ref["taux_7j"] or ref["taux_" + f]) / ref["taux_" + f]
-                    break
+            t7 = taux_7j_estime(l, ref)
             if t7 is None:
                 continue
             fav = l["favoris_jour"] if l["favoris_jour"] is not None else fav_moy
