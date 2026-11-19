@@ -46,7 +46,7 @@ novy damske boty velikost new size women womens men mens kids girls boys shoes b
 def titre_francais(titre):
     """Titre écrit en français ? Plus de mots français que de mots étrangers, et pas de lettre étrangère (ß, ł, ñ…)."""
     import re
-    if re.search(r"[ßąćęłńśźżőűřěčšžůåøæãõñ]", str(titre or "").lower()):
+    if re.search(r"[ßąćęłńśźżőűřěčšžůåøæãõñáíóú]", str(titre or "").lower()):
         return False
     mots = [m[:-1] if len(m) > 3 and m[-1] in "sx" else m for m in re.findall(r"[a-z]+", simplifier(titre))]
     return sum(m in MOTS_FR for m in mots) > sum(m in MOTS_ETRANGERS for m in mots)
