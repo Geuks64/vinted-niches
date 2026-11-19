@@ -1,5 +1,14 @@
 # Suivi — Niches Vinted
 
+## 2026-11-20
+- **Nouvel onglet « 🛒 À acheter » (demandé)** : pour chaque opportunité, chaque article AliExpress fiable relevé par
+  l'extension du PC est comparé au prix de revente. Affiché : photo, nom de l'article, note/ventes, achat, revente,
+  bénéfice (= revente × 0,877 − 0,50 − achat), lien AliExpress. Seuls les articles sous l'« achat max » (≥ 40 % de
+  marge) sont listés ; sinon message « Rien de rentable » + les 3 plus proches pour info. Uniquement dans la page
+  (site/index.html), aucun changement au robot.
+- Rappel : l'idée « produits précis » a déjà été testée (P1/P2, 9-11/11) et abandonnée faute de volume.
+- Prochaine étape : voir si la liste se remplit après les prochains tours de prix (toutes les 6 h).
+
 ## 2026-11-19
 - **Vérification (demandée)** : le robot tourne bien (relevé toutes les ~20 min, tous réussis ce matin) ;
   tableau de bord à jour (stats.json du 19/11 12 h 43) : 62 512 annonces, 17 512 ventes repérées.
