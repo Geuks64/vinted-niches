@@ -23,6 +23,12 @@
   multipliant par le ratio moyen (87,5 % × 1,3 = 113,5 %). Nouvelle fonction `taux_7j_estime` (stats.py) : projette
   la part INVENDUE, ne dépasse jamais 100 %. Test : `python test_stats.py`. Vérifié sur le relevé de 17 h 06 :
   plus aucun taux au-dessus de 100 % (max 100).
+- **Prix AliExpress automatiques (projet, demandé le 19/11)** : Shein et Temu bloquent les robots (case « Je suis
+  humain ») ; AliExpress a un accès officiel gratuit (programme partenaire + Open Platform, recherche
+  `aliexpress.affiliate.product.query`). Étape 1 faite le 19/11 à 21 h 37 : inscription « Portals » envoyée
+  (Non-network > Third-party tools > Others, site Niches Vinted, France), **en cours de validation** (1 h à 2 jours, réponse par e-mail).
+  Ensuite : compte développeur sur openservice.aliexpress.com, créer une appli « Affiliates » -> App Key + App Secret
+  (+ tracking ID), les mettre en secrets GitHub (jamais dans le chat), puis brancher la recherche de prix au robot.
 - **Prochaine étape** : voir si les titres avec marque (« Bottes UGG ») doivent être écartés des Opportunités.
 
 ## 2026-11-18
