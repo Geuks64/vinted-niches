@@ -13,7 +13,7 @@ import statistics
 import time
 from collections import defaultdict
 
-from cible import est_cible
+from cible import est_cible, sans_marque, simplifier
 
 DB = os.environ.get("NICHES_DB", "vinted.db")
 SORTIE = os.environ.get("NICHES_SORTIE", "site/stats.json")
@@ -186,8 +186,12 @@ def opportunites(suivies, ratt, maintenant):
     Les chiffres sont calculés sur le type ; les exemples sont les vraies annonces vendues de ce type.
     Prix d'achat max = prix de vente × (1 − cotisations − marge visée) − emballage  -> gain ≈ marge visée × prix.
     Classement prudent : borne basse de l'intervalle de Wilson du % vendu × gain par pièce."""
-    s_c = [a for a in suivies if a.get("categorie") and est_cible(a)]
-    r_c = [a for a in ratt if a.get("categorie") and est_cible(a)]
+    # Sans marque choisie, Vinted affiche le titre à la place : une annonce titrée « Saucony » passait pour
+    # « sans marque » (19/11). On écarte les titres qui sont exactement une marque vue sur d'autres annonces.
+    marques = {simplifier(a.get("marque")) for a in suivies + ratt if not sans_marque(a.get("marque"), a.get("titre"))}
+    vraie_cible = lambda a: a.get("categorie") and est_cible(a) and simplifier(a.get("titre")) not in marques
+    s_c = [a for a in suivies if vraie_cible(a)]
+    r_c = [a for a in ratt if vraie_cible(a)]
     # groupes : chemin de catégorie -> (annonces suivies, annonces du rattrapage, sous-catégories regroupées)
     groupes = defaultdict(lambda: ([], [], set()))
     for a in s_c:
