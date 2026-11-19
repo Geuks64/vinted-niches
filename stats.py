@@ -13,7 +13,7 @@ import statistics
 import time
 from collections import defaultdict
 
-from cible import est_cible, sans_marque, simplifier
+from cible import est_cible, sans_marque, simplifier, titre_francais
 
 DB = os.environ.get("NICHES_DB", "vinted.db")
 SORTIE = os.environ.get("NICHES_SORTIE", "site/stats.json")
@@ -118,10 +118,9 @@ def segment_stats(lignes, maintenant, ratt=()):
 
 
 def pays_de(a):
-    """Pays du vendeur (code à 2 lettres) lu dans les indicateurs bruts de la page, sinon None."""
-    if not a.get("brut"):
-        return None
-    b = json.loads(a["brut"])
+    """Pays du vendeur (code à 2 lettres) lu dans les indicateurs bruts de la page, sinon « FR » si le titre est
+    en français (le pays n'est jamais lisible en pratique, voir cible.py), sinon None."""
+    b = json.loads(a["brut"]) if a.get("brut") else {}
     for k, v in b.items():
         if k in ("ipCountry", "countryCode"):   # pays du visiteur / version du site, pas du vendeur
             continue
@@ -130,7 +129,7 @@ def pays_de(a):
                 return v.upper()
             if v.lower() == "france":
                 return "FR"
-    return None
+    return "FR" if titre_francais(a.get("titre")) else None
 
 
 def age_heures(a, maintenant):

@@ -480,8 +480,8 @@ document.querySelectorAll("#puces-top button").forEach((b) => b.addEventListener
   afficherTop();
 }));
 
-const videFr = () => vue === "fr" ? `<div class="vide">Le pays du vendeur n'apparaît pas dans les pages Vinted
-  lisibles par l'outil (vérifié le 08/11/2026) : ce filtre reste vide pour l'instant. Utilise « Europe ».</div>`
+const videFr = () => vue === "fr" ? `<div class="vide">Vinted n'affiche pas le pays du vendeur : « France » garde
+  les annonces dont le titre est en français. Pas encore assez de données ici, repasse en « Europe » en attendant.</div>`
   : vue === "part" ? `<div class="vide">Pas encore assez d'annonces de particuliers identifiées (le type de vendeur
   n'est lu sur toutes les annonces que depuis peu). Repasse en « Europe » en attendant.</div>` : null;
 

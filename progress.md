@@ -10,7 +10,13 @@
   (2) certains taux dépassent 100 % (« 112,8 % vendus en 7 j ») ; (3) beaucoup de lignes « À confirmer ».
 - **Bouton Shein ajouté** au panneau Chine (recherche par mots), **vérifié sur iPhone** (« Baskets Saucony » → résultats Shein). Shein peut demander une vérification anti-robot la 1re fois. Pas de recherche par photo par lien chez Shein.
 - **Corrigé** : l'onglet Opportunités (neuf sans marque) comptait des marques quand le titre = la marque (« Saucony » seul) : ces annonces sont écartées si le titre est une marque vue ailleurs (stats.py). Reste : des titres comme « UGGS in braun » passent encore.
-- **Prochaine étape** : décider s'il faut ne garder que la France, et corriger les taux > 100 %.
+- **France seulement (demandé)** : le pays du vendeur n'est lisible nulle part (revérifié depuis le PC en France :
+  ni la page annonce ni la page membre ne le donnent). À la place, `cible.py` garde les annonces dont le **titre est
+  en français** (`titre_francais` : mots français > mots étrangers, pas de lettres ß/ł/ñ…). Effets : Opportunités ne
+  suit plus que les annonces neuves sans marque en français ; la bascule « France » des autres onglets se remplit.
+  Limite : un titre d'un seul mot inconnu (« Stanley ») est écarté. Test : `python test_cible.py`.
+  Sur 8 522 titres du tableau de bord, ~1 466 sont reconnus français : moins de données, donc plus de « À confirmer » au début.
+- **Prochaine étape** : vérifier dans 1-2 h que l'onglet Opportunités ne montre plus de titres étrangers ; corriger les taux > 100 %.
 
 ## 2026-11-18
 - **Fait (11-12/11)** : panneau « Trouver en Chine » amélioré, en ligne.
