@@ -1,5 +1,15 @@
 # Suivi — Niches Vinted
 
+## 2026-11-19
+- **Vérification (demandée)** : le robot tourne bien (relevé toutes les ~20 min, tous réussis ce matin) ;
+  tableau de bord à jour (stats.json du 19/11 12 h 43) : 62 512 annonces, 17 512 ventes repérées.
+- Panneau « Trouver en Chine » testé sur PC : s'ouvre, Google Lens reçoit la photo, AliExpress trouve le produit
+  (ex. « Jeu boxe musical »). Pas testé sur iPhone. Limite : si la photo de l'annonce est mauvaise (carton), Lens ne trouve rien.
+- **Défauts repérés, pas corrigés** : (1) annonces de tous les pays Vinted mélangées (titres allemands/espagnols,
+  marques US/UK : George, F&F, Member's Mark) car le serveur GitHub voit la version « internationale » ;
+  (2) certains taux dépassent 100 % (« 112,8 % vendus en 7 j ») ; (3) beaucoup de lignes « À confirmer ».
+- **Prochaine étape** : décider s'il faut ne garder que la France, et corriger les taux > 100 %.
+
 ## 2026-11-18
 - **Fait (11-12/11)** : panneau « Trouver en Chine » amélioré, en ligne.
   - Bouton DHgate ajouté (1688 non : demande des mots en chinois et un compte).
