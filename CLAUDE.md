@@ -2,7 +2,7 @@
 
 - Travailler directement sur `main` (les tâches planifiées GitHub ne tournent que sur la branche par défaut).
 - Code commenté en français, simple à lire.
-- L'utilisateur n'a pas de PC : tout tourne dans GitHub Actions, le tableau de bord se consulte sur iPhone.
+- L'utilisateur a un PC Windows, mais travaille souvent depuis l'iPhone : tout tourne dans GitHub Actions, le tableau de bord se consulte sur iPhone.
 - Le conteneur de développement Claude ne peut PAS joindre vinted.fr : tester via le workflow
   (`releve.yml`, lancé à la main) et lire ses logs.
 - Rester poli avec Vinted : pas de rafales (un blocage 403 est apparu après ~80 requêtes en quelques
