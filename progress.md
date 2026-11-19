@@ -16,7 +16,10 @@
   suit plus que les annonces neuves sans marque en français ; la bascule « France » des autres onglets se remplit.
   Limite : un titre d'un seul mot inconnu (« Stanley ») est écarté. Test : `python test_cible.py`.
   Sur 8 522 titres du tableau de bord, ~1 466 sont reconnus français : moins de données, donc plus de « À confirmer » au début.
-- **Prochaine étape** : vérifier dans 1-2 h que l'onglet Opportunités ne montre plus de titres étrangers ; corriger les taux > 100 %.
+- **Vérifié (relevé de 16 h 25)** : les 10 opportunités ne montrent presque plus que des titres français
+  (2 965 annonces suivies, 113 types) ; la vue « France » se remplit (150 lignes dans Top). Restait de l'espagnol
+  (« Bota alta marrón ») : lettres á í ó ú ajoutées aux lettres étrangères.
+- **Prochaine étape** : corriger les taux > 100 % ; voir si les titres avec marque (« Bottes UGG ») doivent être écartés.
 
 ## 2026-11-18
 - **Fait (11-12/11)** : panneau « Trouver en Chine » amélioré, en ligne.
