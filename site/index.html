@@ -511,15 +511,19 @@ const videFr = () => vue === "fr" ? `<div class="vide">Vinted n'affiche pas le p
   n'est lu sur toutes les annonces que depuis peu). Repasse en « Europe » en attendant.</div>` : null;
 
 // ---------- Opportunités (toujours sur toutes les annonces : vue « tous »)
-// Prix AliExpress relevés par l'extension du PC (toutes les 6 h) pour les exemples de chaque opportunité :
-// l'article le moins cher parmi ceux notés ≥ 4,5 ★ avec au moins 100 ventes ; ✅ s'il est sous l'achat max.
+// Prix AliExpress relevés par l'extension du PC (toutes les 6 h). Pour chaque exemple vendu, Gemini a comparé
+// la photo Vinted aux produits AliExpress fiables (≥ 4,3 ★, ≥ 50 ventes) et gardé les meilleurs en qualité-prix.
+// On montre ici les 3 meilleurs de l'opportunité (qualité ÷ prix) ; ✅ si le prix est sous l'achat max.
 let PRIX_CHINE = { prix: {} };
 function ligneChine(x) {
-  const l = (PRIX_CHINE.prix[x.nom] || []).filter((p) => p.bas != null && p.lien);
+  const vus = new Set();
+  const l = (PRIX_CHINE.prix[x.nom] || []).flatMap((p) => p.choix || [])
+    .sort((a, b) => b.qualite / b.prix - a.qualite / a.prix).filter((c) => !vus.has(c.lien) && vus.add(c.lien)).slice(0, 3);
   if (!l.length) return "";
-  return `<div class="opp-chine">🇨🇳 AliExpress, articles fiables (${quand(PRIX_CHINE.date / 1000)}) :<br>${l.map((p) =>
-    `<a href="${esc(p.lien)}" target="_blank" rel="noopener">${p.bas <= x.achat_max ? "✅" : "❌"} <b>${euros(p.bas)}</b> · ${fmt(p.note)} ★ · ${p.vendus} vendus
-      · « ${esc(String(p.article || "").slice(0, 45))}… »</a>`).join("<br>")}</div>`;
+  return `<div class="opp-chine">🇨🇳 Meilleurs produits AliExpress (vérifiés par Gemini, ${quand(PRIX_CHINE.date / 1000)}) :<br>${l.map((c, i) =>
+    `<a href="${esc(c.lien)}" target="_blank" rel="noopener">${["🥇", "🥈", "🥉"][i]} ${c.prix <= x.achat_max ? "✅" : "❌"} <b>${euros(c.prix)}</b>
+      · ${fmt(c.note)} ★ · ${c.vendus} vendus · qualité ${c.qualite}/5${c.livraison ? ` · ${esc(c.livraison)}` : ""}
+      <br><span class="petit">« ${esc(String(c.titre || "").slice(0, 50))}… » — ${esc(c.remarque || "")}</span></a>`).join("<br>")}</div>`;
 }
 
 function afficherOpportunites() {
@@ -574,8 +578,12 @@ function afficherOpportunites() {
 function afficherAchat() {
   const o = (S.vues ? S.vues.tous : S).opportunites;
   const l = [];
-  for (const x of (o?.liste || [])) for (const p of (PRIX_CHINE.prix[x.nom] || [])) {
-    if (p.bas == null || !p.lien) continue;
+  // produits vérifiés par Gemini (choix) ; anciens relevés sans Gemini : l'article fiable le moins cher
+  const vus = new Set();
+  for (const x of (o?.liste || [])) for (const r of (PRIX_CHINE.prix[x.nom] || [])) for (const p of
+       (r.choix ? r.choix.map((c) => ({ ...c, bas: c.prix, article: c.titre })) : r.bas != null && r.lien ? [r] : [])) {
+    if (vus.has(p.lien)) continue;
+    vus.add(p.lien);
     const photo = (x.exemples || []).find((a) => a.miniature);
     l.push({ x, p, photo, benef: Math.round((x.prix_vendu * (1 - 0.123) - 0.5 - p.bas) * 100) / 100 });
   }
@@ -587,7 +595,8 @@ function afficherAchat() {
         <div>
           <div class="opp-type">${esc(String(e.p.article || e.p.titre || "").slice(0, 70))}</div>
           <div class="opp-chemin">Pour : ${esc(e.x.type)} · ${e.x.delai_h != null ? `se vend en ~${duree(e.x.delai_h)}` : `${fmt(e.x.taux, " %")} vendus en ${FEN[e.x.fenetre]}`}</div>
-          <div class="opp-chemin">AliExpress : ${fmt(e.p.note)} ★ · ${e.p.vendus} vendus</div>
+          <div class="opp-chemin">AliExpress : ${fmt(e.p.note)} ★ · ${e.p.vendus} vendus${e.p.qualite ? ` · qualité ${e.p.qualite}/5` : ""}</div>
+          ${e.p.remarque ? `<div class="opp-chemin">Gemini : ${esc(e.p.remarque)}</div>` : ""}
         </div>
       </div>
       <div class="opp-chiffres">
