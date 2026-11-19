@@ -318,13 +318,14 @@ th { color: var(--texte-2); font-weight: 600; }
       <input id="texte-recherche" type="search" placeholder="Ex. Nike Tech Fleece, Lego Star Wars…" aria-label="Produit à analyser" required>
       <button class="bouton" type="submit">Analyser</button>
     </form>
-    <!-- Vinted n'a pas de recherche par photo sur le web : la photo part chez Google Lens, qui montre les annonces Vinted qui se ressemblent -->
-    <form class="recherche-form" id="form-photo" action="https://lens.google.com/v3/upload?hl=fr" method="post" enctype="multipart/form-data">
+    <!-- Vinted n'a pas de recherche par photo sur le web : la photo part chez Bing (Google Lens refuse les envois venant d'un autre site : erreur 403) -->
+    <form class="recherche-form" id="form-photo" action="https://www.bing.com/images/search?view=detailv2&iss=sbiupload&FORM=SBIHMP" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="imageBin" id="photo-bin">
       <label class="bouton" style="flex:1;text-align:center">📷 Chercher par photo sur Vinted
-        <input id="photo-vinted" name="encoded_image" type="file" accept="image/*" hidden></label>
+        <input id="photo-vinted" type="file" accept="image/*" hidden></label>
     </form>
-    <p class="petit" style="margin-top:0">Choisis ou prends une photo : Google Lens s'ouvre. Dans sa barre, écris <b>vinted</b>
-      pour ne garder que les annonces Vinted.</p>
+    <p class="petit" style="margin-top:0">Choisis ou prends une photo : Bing s'ouvre et décrit l'article. Ajoute <b>vinted</b>
+      dans sa barre de recherche pour ne garder que les annonces Vinted.</p>
     <details class="aide" open>
       <summary>Comment ça marche ?</summary>
       <p>« Analyser » ouvre une page GitHub déjà remplie : appuie sur <b>Create</b> (ou « Submit new issue »).
@@ -661,8 +662,16 @@ $("#form-recherche").addEventListener("submit", (e) => {
   e.preventDefault();
   lancerAnalyse($("#texte-recherche").value.trim());
 });
-// photo choisie : envoi direct à Google Lens (même onglet : Safari bloque les nouveaux onglets ouverts sans appui)
-$("#photo-vinted").addEventListener("change", (e) => { if (e.target.files.length) $("#form-photo").submit(); });
+// photo choisie : envoi direct à Bing (même onglet : Safari bloque les nouveaux onglets ouverts sans appui)
+$("#photo-vinted").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  // photo réduite à 1200 px (les photos d'iPhone sont trop lourdes pour Bing), envoyée en base64
+  const img = await createImageBitmap(f), r = Math.min(1, 1200 / Math.max(img.width, img.height));
+  const c = document.createElement("canvas"); c.width = img.width * r; c.height = img.height * r;
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  $("#photo-bin").value = c.toDataURL("image/jpeg", 0.85).split(",")[1];
+  $("#form-photo").submit();
+});
 // Analyse « Est-ce que ça se vend ? » : page GitHub pré-remplie (bouton Create) puis suivi du résultat ici
 function lancerAnalyse(t) {
   if (!t) return;
