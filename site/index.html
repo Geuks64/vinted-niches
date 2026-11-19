@@ -95,7 +95,7 @@ section[hidden] { display: none; }
 .opp-chiffres .achat b, .opp-chiffres .achat span { color: var(--bon); }
 .opp-chine { font-size: 12.5px; color: var(--texte-2); margin-top: 8px; line-height: 1.6; }
 .opp-chine a { color: inherit; }
-.opp .chine-btn { width: 100%; margin: 8px 0 0; padding: 10px; font-size: 14px; }
+.opp .chine-btn { display: block; box-sizing: border-box; width: 100%; margin: 8px 0 0; padding: 10px; font-size: 14px; text-align: center; text-decoration: none; }
 .opp .a-confirmer { display: inline-block; font-size: 11.5px; font-weight: 700; color: var(--texte-3);
   background: var(--neutre-doux); border-radius: 99px; padding: 1px 8px; margin-left: 4px; }
 h2 { font-size: 16px; margin: 18px 0 8px; }
@@ -235,6 +235,7 @@ th { color: var(--texte-2); font-weight: 600; }
   <div class="maj" id="maj">Chargement…</div>
   <nav role="tablist">
     <button role="tab" data-onglet="opportunites" aria-selected="true">💎 Opportunités</button>
+    <button role="tab" data-onglet="achat" aria-selected="false">🛒 À acheter</button>
     <button role="tab" data-onglet="recherche" aria-selected="false">🔎 Recherche</button>
     <button id="bouton-plus" type="button" aria-expanded="false">☰ Plus</button>
   </nav>
@@ -268,6 +269,20 @@ th { color: var(--texte-2); font-weight: 600; }
       prix (plus si tu achètes moins cher). Vérifie le vrai prix avec « Trouver en Chine ».</p>
       <p>Classement prudent : les types avec peu d'annonces descendent. « ⏳ À confirmer » = moins de 30
       annonces : le chiffre peut encore bouger.</p>
+    </details>
+  </section>
+
+  <!-- ================= LISTE D'ACHAT ================= -->
+  <section id="achat" hidden>
+    <p class="intro">Ce qu'il faut <b>acheter</b>, <b>où</b>, et ce que tu gagnes : les articles AliExpress fiables
+      (≥ 4,5 ★, ≥ 100 ventes) assez bon marché pour gagner au moins 40 % en les revendant sur Vinted.</p>
+    <div id="liste-achat"></div>
+    <details class="aide">
+      <summary>Comment c'est calculé ?</summary>
+      <p><b>Bénéfice</b> = prix de vente Vinted − cotisations (12,3 %) − emballage (0,50 €) − prix AliExpress.
+      Un article est dans la liste s'il coûte moins que l'« achat max » de son opportunité.</p>
+      <p>⚠️ Avant d'acheter : ouvre le lien, vérifie que c'est <b>le même article</b> que sur Vinted et que la
+      <b>livraison</b> est comprise. Commence par 2-3 pièces pour tester.</p>
     </details>
   </section>
 
@@ -553,6 +568,45 @@ function afficherOpportunites() {
       ${photo ? `<button class="chine-btn" type="button" data-cle="${esc(String(photo.id ?? photo.url))}">🔎 Similaires sur Vinted · 🇨🇳 Trouver en Chine</button>` : ""}
     </div>`;
   }).join("");
+}
+
+// ---------- Liste d'achat : chaque article AliExpress fiable, comparé au prix de revente de son opportunité
+function afficherAchat() {
+  const o = (S.vues ? S.vues.tous : S).opportunites;
+  const l = [];
+  for (const x of (o?.liste || [])) for (const p of (PRIX_CHINE.prix[x.nom] || [])) {
+    if (p.bas == null || !p.lien) continue;
+    const photo = (x.exemples || []).find((a) => a.miniature);
+    l.push({ x, p, photo, benef: Math.round((x.prix_vendu * (1 - 0.123) - 0.5 - p.bas) * 100) / 100 });
+  }
+  l.sort((a, b) => b.benef - a.benef);
+  const bons = l.filter((e) => e.p.bas <= e.x.achat_max);
+  const ligne = (e) => `<div class="opp">
+      <div class="opp-haut">
+        ${e.photo ? `<img loading="lazy" src="${esc(e.photo.miniature)}" alt="">` : ""}
+        <div>
+          <div class="opp-type">${esc(String(e.p.article || e.p.titre || "").slice(0, 70))}</div>
+          <div class="opp-chemin">Pour : ${esc(e.x.type)} · ${e.x.delai_h != null ? `se vend en ~${duree(e.x.delai_h)}` : `${fmt(e.x.taux, " %")} vendus en ${FEN[e.x.fenetre]}`}</div>
+          <div class="opp-chemin">AliExpress : ${fmt(e.p.note)} ★ · ${e.p.vendus} vendus</div>
+        </div>
+      </div>
+      <div class="opp-chiffres">
+        <div class="achat"><span>Achat</span><b>${euros(e.p.bas)}</b></div>
+        <div><span>Revente</span><b>${euros(e.x.prix_vendu)}</b></div>
+        <div><span>Bénéfice</span><b class="${e.benef > 0 ? "ok" : "ko"}">${e.benef > 0 ? "+" : ""}${euros(e.benef)}</b></div>
+      </div>
+      <a class="chine-btn" href="${esc(e.p.lien)}" target="_blank" rel="noopener">🛒 Voir l'article sur AliExpress</a>
+    </div>`;
+  if (!l.length) {
+    $("#liste-achat").innerHTML = `<div class="vide">⏳ Pas encore de prix AliExpress : l'extension du PC les relève
+      toutes les 6 h (PC allumé, Chrome ouvert).</div>`;
+  } else if (!bons.length) {
+    $("#liste-achat").innerHTML = `<div class="vide">❄️ <b>Rien de rentable pour l'instant</b> (${l.length} articles
+      comparés, ${quand(PRIX_CHINE.date / 1000)}). N'achète rien : la liste se remplit seule dès qu'un article passe.<br>
+      Les plus proches, pour info :</div>` + l.slice(0, 3).map(ligne).join("");
+  } else {
+    $("#liste-achat").innerHTML = bons.map(ligne).join("");
+  }
 }
 
 // ---------- Top du moment
@@ -915,7 +969,7 @@ $("#chine-mots").addEventListener("input", liensChine);
 ["#m-vente", "#m-achat", "#m-livraison", "#m-emballage", "#m-frais", "#m-qte"].forEach((id) => $(id).addEventListener("input", calculerMarge));
 $("#chine").addEventListener("click", (e) => { if (e.target.id === "chine") e.target.close(); });   // clic à côté = fermer
 
-function afficherTout() { afficherOpportunites(); afficherTop(); afficherGrilles(); afficherDetails(); afficherRecherches(); afficherEtat(); }
+function afficherTout() { afficherOpportunites(); afficherAchat(); afficherTop(); afficherGrilles(); afficherDetails(); afficherRecherches(); afficherEtat(); }
 
 // ---------- chargement
 async function charger() {
@@ -933,7 +987,7 @@ async function charger() {
   afficherTout();
   chargerRecherchesDirectes().then(afficherRecherches);
   fetch("https://vinted-auto-annonce.pages.dev/api/prix-chine", { cache: "no-store" }).then((r) => r.json())
-    .then((d) => { if (d.date) { PRIX_CHINE = d; afficherOpportunites(); } }).catch(() => {});
+    .then((d) => { if (d.date) { PRIX_CHINE = d; afficherOpportunites(); afficherAchat(); } }).catch(() => {});
 }
 const o = memo("ecran");   // nouvelle clé : on arrive sur « Opportunités » par défaut
 ouvrirOnglet(o && document.getElementById(o) ? o : "opportunites");
