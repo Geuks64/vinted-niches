@@ -8,7 +8,7 @@
 - **Défauts repérés, pas corrigés** : (1) annonces de tous les pays Vinted mélangées (titres allemands/espagnols,
   marques US/UK : George, F&F, Member's Mark) car le serveur GitHub voit la version « internationale » ;
   (2) certains taux dépassent 100 % (« 112,8 % vendus en 7 j ») ; (3) beaucoup de lignes « À confirmer ».
-- **Bouton Shein ajouté** au panneau Chine (recherche par mots). Shein peut demander une vérification anti-robot la 1re fois. Pas de recherche par photo par lien chez Shein.
+- **Bouton Shein ajouté** au panneau Chine (recherche par mots), **vérifié sur iPhone** (« Baskets Saucony » → résultats Shein). Shein peut demander une vérification anti-robot la 1re fois. Pas de recherche par photo par lien chez Shein.
 - **Prochaine étape** : décider s'il faut ne garder que la France, et corriger les taux > 100 %.
 
 ## 2026-11-18
