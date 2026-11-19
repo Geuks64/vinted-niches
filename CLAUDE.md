@@ -160,3 +160,8 @@
 - Le workflow pousse un commit `.maintien` 1 fois/mois : faire `git pull` avant de pousser.
 - Ancien diagnostic (étape 0) : dépôt `vinted-auto-annonce`, branche `claude/confident-mayer-okdotd`,
   `niches/diag.py` + workflow `diag-niches.yml` (et copie de l'outil dans `niches/outil/`).
+## Fin de chaque travail (sur le PC ou depuis le téléphone)
+
+- Travailler directement sur la branche `main`. Si une autre branche a été créée, la fusionner dans `main` et l'envoyer sur GitHub avant de finir, sans attendre qu'on le demande.
+- Mettre à jour `progress.md` (le créer s'il n'existe pas) : où on en est, ce qui a été décidé, la prochaine étape, avec la date. Le dire en une ligne.
+- Répondre en français, simplement, sans jargon : l'utilisateur n'est pas développeur.
