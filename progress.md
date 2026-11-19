@@ -33,6 +33,8 @@
 
 - Onglet 🔎 Recherche : bouton « 📷 Chercher par photo sur Vinted » (19/11 soir). Vinted n'a pas de recherche photo sur le web. Google Lens refuse les envois venant d'un autre site (erreur 403) : la photo (réduite à 1200 px) part donc chez Bing, puis ajouter « vinted » dans sa barre. Testé de bout en bout sur PC ; à essayer sur iPhone.
 
+- Prix AliExpress : e-mail « Your affiliate account is ready » reçu le 19/11 → étape 1 validée. Prochaine étape : compte développeur sur openservice.aliexpress.com puis appli « Affiliates » (codes en secrets GitHub, jamais dans le chat).
+
 ## 2026-11-18
 - **Fait (11-12/11)** : panneau « Trouver en Chine » amélioré, en ligne.
   - Bouton DHgate ajouté (1688 non : demande des mots en chinois et un compte).
