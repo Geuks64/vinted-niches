@@ -19,7 +19,11 @@
 - **Vérifié (relevé de 16 h 25)** : les 10 opportunités ne montrent presque plus que des titres français
   (2 965 annonces suivies, 113 types) ; la vue « France » se remplit (150 lignes dans Top). Restait de l'espagnol
   (« Bota alta marrón ») : lettres á í ó ú ajoutées aux lettres étrangères.
-- **Prochaine étape** : corriger les taux > 100 % ; voir si les titres avec marque (« Bottes UGG ») doivent être écartés.
+- **Taux > 100 % corrigé** : venait du Top (`taux_7j_estime`), qui ramenait un taux 24 h / 3 j à 7 j en le
+  multipliant par le ratio moyen (87,5 % × 1,3 = 113,5 %). Nouvelle fonction `taux_7j_estime` (stats.py) : projette
+  la part INVENDUE, ne dépasse jamais 100 %. Test : `python test_stats.py`. Vérifié sur le relevé de 17 h 06 :
+  plus aucun taux au-dessus de 100 % (max 100).
+- **Prochaine étape** : voir si les titres avec marque (« Bottes UGG ») doivent être écartés des Opportunités.
 
 ## 2026-11-18
 - **Fait (11-12/11)** : panneau « Trouver en Chine » amélioré, en ligne.
