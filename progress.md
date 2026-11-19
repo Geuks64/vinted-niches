@@ -31,7 +31,7 @@
   (+ tracking ID), les mettre en secrets GitHub (jamais dans le chat), puis brancher la recherche de prix au robot.
 - **Prochaine étape** : voir si les titres avec marque (« Bottes UGG ») doivent être écartés des Opportunités.
 
-- Onglet 🔎 Recherche : bouton « 📷 Chercher par photo sur Vinted » (19/11 soir). Vinted n'a pas de recherche photo sur le web : la photo est envoyée à Google Lens (même onglet), puis écrire « vinted » dans Lens. Bouton vérifié en ligne ; l'envoi de photo reste à essayer sur iPhone.
+- Onglet 🔎 Recherche : bouton « 📷 Chercher par photo sur Vinted » (19/11 soir). Vinted n'a pas de recherche photo sur le web. Google Lens refuse les envois venant d'un autre site (erreur 403) : la photo (réduite à 1200 px) part donc chez Bing, puis ajouter « vinted » dans sa barre. Testé de bout en bout sur PC ; à essayer sur iPhone.
 
 ## 2026-11-18
 - **Fait (11-12/11)** : panneau « Trouver en Chine » amélioré, en ligne.
