@@ -35,6 +35,9 @@
 
 - Prix AliExpress : e-mail « Your affiliate account is ready » reçu le 19/11 → étape 1 validée. Prochaine étape : compte développeur sur openservice.aliexpress.com puis appli « Affiliates » (codes en secrets GitHub, jamais dans le chat).
 
+- **Prix AliExpress automatiques (20/11, nuit)** : la piste « compte développeur AliExpress » est abandonnée (pièce d'identité + questionnaire, trop compliqué). À la place, l'extension Chrome du PC (Auto-Annonce 1.8.1) lit la page de recherche AliExpress de chaque exemple d'opportunité, une recherche toutes les 2 min, un tour toutes les 6 h. Prix gardés sur le serveur Auto-Annonce (`/api/prix-chine`), affichés sous chaque opportunité : « ✅/❌ « mots » dès ~X € » (X = 1 article sur 4 moins cher, parmi les 20 premiers résultats). Le robot GitHub n'a pas eu le droit de tester AliExpress lui-même.
+- Premier tour (en rafale) : 11 prix trouvés, tous ❌ (ex. manteau ~33-68 € pour 13,76 € d'achat max). AliExpress a affiché un curseur « Faites glisser » après ~10 recherches → ralenti à 1 recherche / 2 min. À vérifier : que le tour lent passe sans blocage (~1 h pour 30 recherches).
+
 ## 2026-11-18
 - **Fait (11-12/11)** : panneau « Trouver en Chine » amélioré, en ligne.
   - Bouton DHgate ajouté (1688 non : demande des mots en chinois et un compte).
