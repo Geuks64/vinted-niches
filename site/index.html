@@ -496,15 +496,17 @@ const videFr = () => vue === "fr" ? `<div class="vide">Vinted n'affiche pas le p
   n'est lu sur toutes les annonces que depuis peu). Repasse en « Europe » en attendant.</div>` : null;
 
 // ---------- Opportunités (toujours sur toutes les annonces : vue « tous »)
-// Prix AliExpress relevés par l'extension du PC (toutes les 6 h) pour les exemples de chaque opportunité.
-// « ~X € » = prix sous lequel on trouve 1 article sur 4 parmi les 20 premiers résultats ; ✅ si sous l'achat max.
+// Prix AliExpress relevés par l'extension du PC (toutes les 6 h) pour les exemples de chaque opportunité :
+// l'article le moins cher parmi ceux notés ≥ 4,5 ★ avec au moins 100 ventes ; ✅ s'il est sous l'achat max.
 let PRIX_CHINE = { prix: {} };
 function ligneChine(x) {
-  const l = (PRIX_CHINE.prix[x.nom] || []).filter((p) => p.bas != null);
+  const l = (PRIX_CHINE.prix[x.nom] || []).filter((p) => p.bas != null && p.lien);
   if (!l.length) return "";
-  return `<div class="opp-chine">🇨🇳 AliExpress (${quand(PRIX_CHINE.date / 1000)}) :<br>${l.map((p) =>
-    `<a href="${esc(p.url)}" target="_blank" rel="noopener">${p.bas <= x.achat_max ? "✅" : "❌"} « ${esc(p.mots)} » dès ~<b>${euros(p.bas)}</b></a>`).join("<br>")}</div>`;
+  return `<div class="opp-chine">🇨🇳 AliExpress, articles fiables (${quand(PRIX_CHINE.date / 1000)}) :<br>${l.map((p) =>
+    `<a href="${esc(p.lien)}" target="_blank" rel="noopener">${p.bas <= x.achat_max ? "✅" : "❌"} <b>${euros(p.bas)}</b> · ${fmt(p.note)} ★ · ${p.vendus} vendus
+      · « ${esc(String(p.article || "").slice(0, 45))}… »</a>`).join("<br>")}</div>`;
 }
+
 function afficherOpportunites() {
   const o = (S.vues ? S.vues.tous : S).opportunites;
   if (!o) {
