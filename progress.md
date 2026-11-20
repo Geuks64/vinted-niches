@@ -8,6 +8,9 @@
   `stats.json` sur GitHub Pages (lu par l'appli, CORS ouvert). L'ancienne adresse redirige vers l'appli.
   Liens directs : `…pages.dev/#achat`, `#opportunites`, `#top`… Vérifié en ligne sur écran de téléphone.
 
+- **1.9.0 (20/11)** : analyse détaillée. Pour chaque recherche, les 8 produits les moins chers parmi les assez fiables (≥ 4,3 ★, ≥ 50 ventes) sont envoyés à `POST /api/prix-chine` : Gemini compare leurs photos à la photo Vinted, écarte les autres produits/accessoires, note la qualité (1-5) avec une remarque ; on garde les 3 meilleurs (qualité ÷ prix). Les fiches produit AliExpress ne sont pas lues (page remplie après coup : pas de note vendeur ni livraison dans la page brute). Vérifié : 52 produits jugés au tour de 7 h 13.
+- Niches affiche ces produits (🥇🥈🥉) sous chaque opportunité et dans l'onglet « À acheter » (ancien format gardé en secours).
+
 ## 2026-11-20
 - **Nouvel onglet « 🛒 À acheter » (demandé)** : pour chaque opportunité, chaque article AliExpress fiable relevé par
   l'extension du PC est comparé au prix de revente. Affiché : photo, nom de l'article, note/ventes, achat, revente,
