@@ -1,5 +1,10 @@
 # Règles du projet vinted-niches
 
+> **Depuis le 2026-11-20, l'interface (écrans) n'est PLUS ici** : elle est dans l'appli Auto-Annonce
+> (dépôt `vinted-auto-annonce`, fichiers `public/niches.js` et `public/niches.css`, onglets Trouver / Acheter / Plus).
+> Ce dépôt garde le robot (collecte, stats.py) et publie `stats.json` sur GitHub Pages ; `site/index.html` ne fait
+> que rediriger vers https://vinted-auto-annonce.pages.dev. Pour changer un écran : modifier `vinted-auto-annonce`.
+
 - Travailler directement sur `main` (les tâches planifiées GitHub ne tournent que sur la branche par défaut).
 - Code commenté en français, simple à lire.
 - L'utilisateur a un PC Windows, mais travaille souvent depuis l'iPhone : tout tourne dans GitHub Actions, le tableau de bord se consulte sur iPhone.

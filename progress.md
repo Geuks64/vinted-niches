@@ -1,5 +1,13 @@
 # Suivi — Niches Vinted
 
+## 2026-11-20 (fusion)
+- **Une seule appli (demandé)** : les écrans de Niches sont maintenant dans Auto-Annonce
+  (https://vinted-auto-annonce.pages.dev), barre en bas : 💎 Trouver (Opportunités) · 🛒 Acheter · 📸 Vendre
+  (Auto-Annonce + Reposter) · ☰ Plus (Top, Plus aimées, Recherche, Ventes, Détails, Relevé, Rapport, Réglages).
+  Code : `vinted-auto-annonce/public/niches.js` + `niches.css`. Ce dépôt garde le robot et publie toujours
+  `stats.json` sur GitHub Pages (lu par l'appli, CORS ouvert). L'ancienne adresse redirige vers l'appli.
+  Liens directs : `…pages.dev/#achat`, `#opportunites`, `#top`… Vérifié en ligne sur écran de téléphone.
+
 ## 2026-11-20
 - **Nouvel onglet « 🛒 À acheter » (demandé)** : pour chaque opportunité, chaque article AliExpress fiable relevé par
   l'extension du PC est comparé au prix de revente. Affiché : photo, nom de l'article, note/ventes, achat, revente,
