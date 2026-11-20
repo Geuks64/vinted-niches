@@ -21,6 +21,9 @@
   (manga, films…) ajoutées aux marques écartées ; recherches d'un seul mot écartées ; consigne Gemini plus stricte
   côté Auto-Annonce (même style, lot ≠ pièce seule, licence = refus). Vérifié en ligne : 7 produits, plus de veste
   One Piece ni « Veste. ». Le tapis/lot reste jusqu'au prochain tour (consigne appliquée aux nouveaux tours).
+- **Photos côte à côte (demandé : « des fois l'image Vinted et AliExpress ne sont pas pareilles »)** : chaque carte
+  d'« À acheter » montre en grand la photo Vinted vendue et la photo AliExpress. AliExpress refuse ses photos
+  demandées depuis un autre site : `referrerpolicy="no-referrer"` sur l'image corrige ça. Vérifié sur écran de téléphone.
 - Prochaine étape : au prochain tour, vérifier que les comparaisons « lot contre pièce seule » ont disparu.
 
 ## 2026-11-19
