@@ -609,7 +609,7 @@ function afficherAchat() {
   const ligne = (e) => `<div class="opp">
       <div class="duo">
         <figure><img loading="lazy" src="${esc(e.ex.miniature || "")}" alt="Annonce Vinted"><figcaption>Vendu sur Vinted</figcaption></figure>
-        <figure><img loading="lazy" src="${esc(e.p.image || "")}" alt="Produit AliExpress"><figcaption>À acheter sur AliExpress</figcaption></figure>
+        <figure><img loading="lazy" referrerpolicy="no-referrer" src="${esc(e.p.image || "")}" alt="Produit AliExpress"><figcaption>À acheter sur AliExpress</figcaption></figure>
       </div>
       <div class="opp-haut">
         <div>
