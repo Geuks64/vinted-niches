@@ -27,6 +27,13 @@
 - **Correction (dit par l'utilisateur le 20/11)** : Vinted A une recherche par photo, dans l'appli iPhone ET sur le
   site PC. La note du 19/11 (« pas de recherche photo sur le web ») était fausse. Le bouton « 📷 Chercher par photo »
   de l'onglet Recherche (détour par Bing) est donc peu utile : à retirer si l'utilisateur est d'accord.
+- **Diagnostic de la stratégie (demandé, 20/11)**, sur stats.json du jour : les 10 opportunités sont toutes
+  « à confirmer » (8 à 16 annonces, 3 à 12 ventes chacune) ; catégories trop larges (« Sacs à main » vendus de 1 € à
+  50 €) ; « neuf sans marque » inclut de l'ancien, du fait main, de l'unique (« 11 torchons anciens ») ; prix bas
+  (médianes 5-35 €) donc petit gain par pièce ; concurrence directe Temu/Shein ; achat-revente régulier = compte
+  Vinted Pro obligatoire (+ statut d'entreprise), dropshipping interdit selon des guides (non vérifié sur Vinted).
+  Conseils donnés : test réel de 2-3 pièces, statut pro avant de faire du volume, piste alternative = seconde main
+  de marque (vide-greniers, lots) en se servant des onglets Top / Plus aimées.
 - Prochaine étape : au prochain tour, vérifier que les comparaisons « lot contre pièce seule » ont disparu.
 
 ## 2026-11-19
