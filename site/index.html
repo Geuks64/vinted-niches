@@ -81,6 +81,10 @@ section[hidden] { display: none; }
 .intro { color: var(--texte-2); font-size: 14px; margin: 0 0 12px; }
 .opp { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
 .opp-haut { display: flex; gap: 12px; align-items: center; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.duo figure { margin: 0; }
+.duo img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--barre-fond); display: block; }
+.duo figcaption { font-size: 12px; text-align: center; margin-top: 4px; opacity: .75; }
 .opp-haut img { width: 64px; height: 84px; object-fit: cover; border-radius: 8px; background: var(--barre-fond); flex: none; }
 .opp-rang { font-size: 12px; font-weight: 700; color: var(--texte-3); }
 .opp-type { font-size: 18px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
@@ -601,9 +605,13 @@ function afficherAchat() {
   }
   l.sort((a, b) => b.benef - a.benef);
   const bons = l.filter((e) => e.p.bas <= e.achatMax);
+  // les 2 photos côte à côte : l'utilisateur vérifie d'un coup d'œil que c'est bien le même article
   const ligne = (e) => `<div class="opp">
+      <div class="duo">
+        <figure><img loading="lazy" src="${esc(e.ex.miniature || "")}" alt="Annonce Vinted"><figcaption>Vendu sur Vinted</figcaption></figure>
+        <figure><img loading="lazy" src="${esc(e.p.image || "")}" alt="Produit AliExpress"><figcaption>À acheter sur AliExpress</figcaption></figure>
+      </div>
       <div class="opp-haut">
-        ${e.ex.miniature ? `<img loading="lazy" src="${esc(e.ex.miniature)}" alt="">` : ""}
         <div>
           <div class="opp-type">${esc(String(e.p.article || e.p.titre || "").slice(0, 70))}</div>
           <div class="opp-chemin">Comparé à : <a href="https://www.vinted.fr${esc(e.ex.url || "/items/" + e.ex.id)}" target="_blank" rel="noopener">« ${esc(e.ex.titre)} »</a> vendu ${euros(e.revente)}</div>
