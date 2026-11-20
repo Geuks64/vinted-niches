@@ -7,7 +7,16 @@
   marge) sont listés ; sinon message « Rien de rentable » + les 3 plus proches pour info. Uniquement dans la page
   (site/index.html), aucun changement au robot.
 - Rappel : l'idée « produits précis » a déjà été testée (P1/P2, 9-11/11) et abandonnée faute de volume.
-- Prochaine étape : voir si la liste se remplit après les prochains tours de prix (toutes les 6 h).
+- **Corrigé (demandé)** : la 1re version donnait de faux résultats (broche comparée aux sacs à main, pantoufles aux
+  bottes, veste « logo Red Bull »), car elle comparait au prix médian de la catégorie. Maintenant : chaque produit est
+  comparé à **l'annonce Vinted vendue précise** qu'on a cherchée (son prix, sa photo, son lien sur la carte), annonces
+  de marque écartées, articles avec marque/logo connu écartés (liste courte dans `afficherAchat`). Une comparaison
+  par mots a été essayée puis retirée (titres AliExpress bourrés de mots-clés : « serviette vaisselle » passait pour
+  « serviettes + tapis de bain ») : on ne garde **que les produits que Gemini a vus « même produit »** sur la photo
+  (`choix`, extension Auto-Annonce 1.9.0, faite en parallèle par une autre session).
+- Vérifié en ligne : l'onglet affiche « Pas encore de produits vérifiés par Gemini » (les prix actuels datent d'avant 1.9.0).
+- Prochaine étape : après le prochain tour de prix de l'extension 1.9.0, regarder si la liste se remplit et si les
+  produits proposés ressemblent vraiment aux annonces Vinted.
 
 ## 2026-11-19
 - **Vérification (demandée)** : le robot tourne bien (relevé toutes les ~20 min, tous réussis ce matin) ;
