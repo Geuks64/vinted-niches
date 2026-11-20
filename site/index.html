@@ -582,14 +582,15 @@ function afficherOpportunites() {
 // sur la photo : la comparaison par mots laissait passer n'importe quoi (titres AliExpress bourrés de mots-clés).
 function afficherAchat() {
   // shortcut: liste courte de marques/logos connus (contrefaçon), à compléter si d'autres passent.
-  const marqueLogo = /(?<![\p{L}\d])(?:logo|ugg|nike|adidas|puma|reebok|new balance|converse|vans|lacoste|ralph lauren|tommy hilfiger|north face|moncler|levi'?s|zara|gucci|louis vuitton|chanel|dior|prada|herm[eè]s|balenciaga|stanley|disney|marvel|pok[eé]mon|red bull|ferrari|porsche|bmw|mercedes|harley|supreme|stone island|carhartt|crocs)(?![\p{L}\d])/iu;
+  const marqueLogo = /(?<![\p{L}\d])(?:logo|ugg|nike|adidas|puma|reebok|new balance|converse|vans|lacoste|ralph lauren|tommy hilfiger|north face|moncler|levi'?s|zara|gucci|louis vuitton|chanel|dior|prada|herm[eè]s|balenciaga|stanley|disney|marvel|pok[eé]mon|red bull|ferrari|porsche|bmw|mercedes|harley|supreme|stone island|carhartt|crocs|one piece|luffy|naruto|dragon ball|anime|hello kitty|harry potter|star wars|barbie)(?![\p{L}\d])/iu;
   const o = (S.vues ? S.vues.tous : S).opportunites;
   const l = [];
   const vus = new Set();
   for (const x of (o?.liste || [])) for (const r of (PRIX_CHINE.prix[x.nom] || [])) {
     const ex = (x.exemples || []).find((a) => a.titre === r.titre);
     const revente = ex && (ex.prix_final ?? ex.prix);
-    if (!revente || aUneMarque(ex)) continue;
+    // titre trop vague (« Veste. ») : n'importe quelle veste passerait, le prix de revente ne veut rien dire
+    if (!revente || aUneMarque(ex) || String(r.mots || "").split(" ").filter(Boolean).length < 2) continue;
     for (const p of (r.choix || []).map((c) => ({ ...c, bas: c.prix, article: c.titre }))) {
       if (vus.has(p.lien) || marqueLogo.test(`${p.article} ${r.titre}`)) continue;
       vus.add(p.lien);
