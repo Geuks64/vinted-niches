@@ -24,6 +24,9 @@
 - **Photos côte à côte (demandé : « des fois l'image Vinted et AliExpress ne sont pas pareilles »)** : chaque carte
   d'« À acheter » montre en grand la photo Vinted vendue et la photo AliExpress. AliExpress refuse ses photos
   demandées depuis un autre site : `referrerpolicy="no-referrer"` sur l'image corrige ça. Vérifié sur écran de téléphone.
+- **Correction (dit par l'utilisateur le 20/11)** : Vinted A une recherche par photo, dans l'appli iPhone ET sur le
+  site PC. La note du 19/11 (« pas de recherche photo sur le web ») était fausse. Le bouton « 📷 Chercher par photo »
+  de l'onglet Recherche (détour par Bing) est donc peu utile : à retirer si l'utilisateur est d'accord.
 - Prochaine étape : au prochain tour, vérifier que les comparaisons « lot contre pièce seule » ont disparu.
 
 ## 2026-11-19
