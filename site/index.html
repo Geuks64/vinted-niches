@@ -279,8 +279,11 @@ th { color: var(--texte-2); font-weight: 600; }
     <div id="liste-achat"></div>
     <details class="aide">
       <summary>Comment c'est calculé ?</summary>
-      <p><b>Bénéfice</b> = prix de vente Vinted − cotisations (12,3 %) − emballage (0,50 €) − prix AliExpress.
-      Un article est dans la liste s'il coûte moins que l'« achat max » de son opportunité.</p>
+      <p>Chaque article AliExpress est comparé à <b>l'annonce Vinted vendue</b> qu'on a cherchée (photo et lien sur
+      la carte), pas à toute la catégorie. Gemini vérifie sur la photo que c'est le même genre d'article. Les articles
+      avec une <b>marque ou un logo</b> sont écartés (contrefaçon).</p>
+      <p><b>Bénéfice</b> = prix de vente de cette annonce − cotisations (12,3 %) − emballage (0,50 €) − prix
+      AliExpress. Dans la liste seulement s'il reste au moins 40 % de marge.</p>
       <p>⚠️ Avant d'acheter : ouvre le lien, vérifie que c'est <b>le même article</b> que sur Vinted et que la
       <b>livraison</b> est comprise. Commence par 2-3 pièces pour tester.</p>
     </details>
@@ -574,34 +577,52 @@ function afficherOpportunites() {
   }).join("");
 }
 
-// ---------- Liste d'achat : chaque article AliExpress fiable, comparé au prix de revente de son opportunité
+// ---------- Liste d'achat : chaque article AliExpress, comparé à L'ANNONCE VINTED VENDUE qu'il cherchait
+// (son prix à elle, pas la médiane de toute la catégorie).
+// Anciens relevés sans Gemini : même article = le 1er mot de la recherche (le nom : bottes, manteau…) ET au moins
+// 60 % des mots dans le titre AliExpress (mots sans accents ni pluriel).
+const racines = (t) => simple(t).split(/[^a-z0-9]+/).filter((m) => m.length > 1).map((m) => m.replace(/[sx]$/, ""));
+function memeArticle(mots, article) {
+  const r = racines(mots), a = new Set(racines(article));
+  return r.length > 0 && a.has(r[0]) && r.filter((m) => a.has(m)).length >= 0.6 * r.length;
+}
 function afficherAchat() {
+  // shortcut: liste courte de marques/logos connus (contrefaçon), à compléter si d'autres passent.
+  const marqueLogo = /(?<![\p{L}\d])(?:logo|ugg|nike|adidas|puma|reebok|new balance|converse|vans|lacoste|ralph lauren|tommy hilfiger|north face|moncler|levi'?s|zara|gucci|louis vuitton|chanel|dior|prada|herm[eè]s|balenciaga|stanley|disney|marvel|pok[eé]mon|red bull|ferrari|porsche|bmw|mercedes|harley|supreme|stone island|carhartt|crocs)(?![\p{L}\d])/iu;
   const o = (S.vues ? S.vues.tous : S).opportunites;
   const l = [];
-  // produits vérifiés par Gemini (choix) ; anciens relevés sans Gemini : l'article fiable le moins cher
+  // produits vérifiés par Gemini (choix, photo comparée) ; anciens relevés sans Gemini : l'article fiable le moins cher
   const vus = new Set();
-  for (const x of (o?.liste || [])) for (const r of (PRIX_CHINE.prix[x.nom] || [])) for (const p of
-       (r.choix ? r.choix.map((c) => ({ ...c, bas: c.prix, article: c.titre })) : r.bas != null && r.lien ? [r] : [])) {
-    if (vus.has(p.lien)) continue;
-    vus.add(p.lien);
-    const photo = (x.exemples || []).find((a) => a.miniature);
-    l.push({ x, p, photo, benef: Math.round((x.prix_vendu * (1 - 0.123) - 0.5 - p.bas) * 100) / 100 });
+  for (const x of (o?.liste || [])) for (const r of (PRIX_CHINE.prix[x.nom] || [])) {
+    const ex = (x.exemples || []).find((a) => a.titre === r.titre);
+    const revente = ex && (ex.prix_final ?? ex.prix);
+    if (!revente || aUneMarque(ex)) continue;
+    const cands = r.choix ? r.choix.map((c) => ({ ...c, bas: c.prix, article: c.titre }))
+      : r.bas != null && r.lien && r.article && memeArticle(r.mots, r.article) ? [r] : [];
+    for (const p of cands) {
+      if (vus.has(p.lien) || marqueLogo.test(`${p.article} ${r.titre}`)) continue;
+      vus.add(p.lien);
+      // achat max = même règle que les opportunités (≥ 40 % de marge), sur le prix de CETTE annonce
+      l.push({ x, p, ex, revente, achatMax: revente * (1 - 0.123 - 0.40) - 0.5,
+               benef: Math.round((revente * (1 - 0.123) - 0.5 - p.bas) * 100) / 100 });
+    }
   }
   l.sort((a, b) => b.benef - a.benef);
-  const bons = l.filter((e) => e.p.bas <= e.x.achat_max);
+  const bons = l.filter((e) => e.p.bas <= e.achatMax);
   const ligne = (e) => `<div class="opp">
       <div class="opp-haut">
-        ${e.photo ? `<img loading="lazy" src="${esc(e.photo.miniature)}" alt="">` : ""}
+        ${e.ex.miniature ? `<img loading="lazy" src="${esc(e.ex.miniature)}" alt="">` : ""}
         <div>
           <div class="opp-type">${esc(String(e.p.article || e.p.titre || "").slice(0, 70))}</div>
-          <div class="opp-chemin">Pour : ${esc(e.x.type)} · ${e.x.delai_h != null ? `se vend en ~${duree(e.x.delai_h)}` : `${fmt(e.x.taux, " %")} vendus en ${FEN[e.x.fenetre]}`}</div>
+          <div class="opp-chemin">Comparé à : <a href="https://www.vinted.fr${esc(e.ex.url || "/items/" + e.ex.id)}" target="_blank" rel="noopener">« ${esc(e.ex.titre)} »</a> vendu ${euros(e.revente)}</div>
+          <div class="opp-chemin">${esc(e.x.type)} · ${e.x.delai_h != null ? `se vend en ~${duree(e.x.delai_h)}` : `${fmt(e.x.taux, " %")} vendus en ${FEN[e.x.fenetre]}`}</div>
           <div class="opp-chemin">AliExpress : ${fmt(e.p.note)} ★ · ${e.p.vendus} vendus${e.p.qualite ? ` · qualité ${e.p.qualite}/5` : ""}</div>
           ${e.p.remarque ? `<div class="opp-chemin">Gemini : ${esc(e.p.remarque)}</div>` : ""}
         </div>
       </div>
       <div class="opp-chiffres">
         <div class="achat"><span>Achat</span><b>${euros(e.p.bas)}</b></div>
-        <div><span>Revente</span><b>${euros(e.x.prix_vendu)}</b></div>
+        <div><span>Revente</span><b>${euros(e.revente)}</b></div>
         <div><span>Bénéfice</span><b class="${e.benef > 0 ? "ok" : "ko"}">${e.benef > 0 ? "+" : ""}${euros(e.benef)}</b></div>
       </div>
       <a class="chine-btn" href="${esc(e.p.lien)}" target="_blank" rel="noopener">🛒 Voir l'article sur AliExpress</a>
