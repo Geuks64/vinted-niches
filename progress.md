@@ -15,8 +15,13 @@
   « serviettes + tapis de bain ») : on ne garde **que les produits que Gemini a vus « même produit »** sur la photo
   (`choix`, extension Auto-Annonce 1.9.0, faite en parallèle par une autre session).
 - Vérifié en ligne : l'onglet affiche « Pas encore de produits vérifiés par Gemini » (les prix actuels datent d'avant 1.9.0).
-- Prochaine étape : après le prochain tour de prix de l'extension 1.9.0, regarder si la liste se remplit et si les
-  produits proposés ressemblent vraiment aux annonces Vinted.
+- **1er tour avec Gemini (20/11 7 h 13)** : 27 recherches sur 29 analysées, 52 produits, 9 dans « À acheter ».
+  Bons : torchons à carreaux, housses de chaise. Défauts vus : veste One Piece (licence), titre Vinted trop vague
+  (« Veste. » à 40 €), tapis de bain seul comparé à un « lot 6 serviettes + tapis » à 33 €. Corrigé : licences
+  (manga, films…) ajoutées aux marques écartées ; recherches d'un seul mot écartées ; consigne Gemini plus stricte
+  côté Auto-Annonce (même style, lot ≠ pièce seule, licence = refus). Vérifié en ligne : 7 produits, plus de veste
+  One Piece ni « Veste. ». Le tapis/lot reste jusqu'au prochain tour (consigne appliquée aux nouveaux tours).
+- Prochaine étape : au prochain tour, vérifier que les comparaisons « lot contre pièce seule » ont disparu.
 
 ## 2026-11-19
 - **Vérification (demandée)** : le robot tourne bien (relevé toutes les ~20 min, tous réussis ce matin) ;
