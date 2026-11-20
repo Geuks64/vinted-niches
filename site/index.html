@@ -274,8 +274,8 @@ th { color: var(--texte-2); font-weight: 600; }
 
   <!-- ================= LISTE D'ACHAT ================= -->
   <section id="achat" hidden>
-    <p class="intro">Ce qu'il faut <b>acheter</b>, <b>où</b>, et ce que tu gagnes : les articles AliExpress fiables
-      (≥ 4,5 ★, ≥ 100 ventes) assez bon marché pour gagner au moins 40 % en les revendant sur Vinted.</p>
+    <p class="intro">Ce qu'il faut <b>acheter</b>, <b>où</b>, et ce que tu gagnes : les articles AliExpress bien notés,
+      vérifiés sur photo par Gemini, assez bon marché pour gagner au moins 40 % en les revendant sur Vinted.</p>
     <div id="liste-achat"></div>
     <details class="aide">
       <summary>Comment c'est calculé ?</summary>
@@ -578,28 +578,19 @@ function afficherOpportunites() {
 }
 
 // ---------- Liste d'achat : chaque article AliExpress, comparé à L'ANNONCE VINTED VENDUE qu'il cherchait
-// (son prix à elle, pas la médiane de toute la catégorie).
-// Anciens relevés sans Gemini : même article = le 1er mot de la recherche (le nom : bottes, manteau…) ET au moins
-// 60 % des mots dans le titre AliExpress (mots sans accents ni pluriel).
-const racines = (t) => simple(t).split(/[^a-z0-9]+/).filter((m) => m.length > 1).map((m) => m.replace(/[sx]$/, ""));
-function memeArticle(mots, article) {
-  const r = racines(mots), a = new Set(racines(article));
-  return r.length > 0 && a.has(r[0]) && r.filter((m) => a.has(m)).length >= 0.6 * r.length;
-}
+// (son prix à elle, pas la médiane de toute la catégorie). Seulement les produits que Gemini a vus « même produit »
+// sur la photo : la comparaison par mots laissait passer n'importe quoi (titres AliExpress bourrés de mots-clés).
 function afficherAchat() {
   // shortcut: liste courte de marques/logos connus (contrefaçon), à compléter si d'autres passent.
   const marqueLogo = /(?<![\p{L}\d])(?:logo|ugg|nike|adidas|puma|reebok|new balance|converse|vans|lacoste|ralph lauren|tommy hilfiger|north face|moncler|levi'?s|zara|gucci|louis vuitton|chanel|dior|prada|herm[eè]s|balenciaga|stanley|disney|marvel|pok[eé]mon|red bull|ferrari|porsche|bmw|mercedes|harley|supreme|stone island|carhartt|crocs)(?![\p{L}\d])/iu;
   const o = (S.vues ? S.vues.tous : S).opportunites;
   const l = [];
-  // produits vérifiés par Gemini (choix, photo comparée) ; anciens relevés sans Gemini : l'article fiable le moins cher
   const vus = new Set();
   for (const x of (o?.liste || [])) for (const r of (PRIX_CHINE.prix[x.nom] || [])) {
     const ex = (x.exemples || []).find((a) => a.titre === r.titre);
     const revente = ex && (ex.prix_final ?? ex.prix);
     if (!revente || aUneMarque(ex)) continue;
-    const cands = r.choix ? r.choix.map((c) => ({ ...c, bas: c.prix, article: c.titre }))
-      : r.bas != null && r.lien && r.article && memeArticle(r.mots, r.article) ? [r] : [];
-    for (const p of cands) {
+    for (const p of (r.choix || []).map((c) => ({ ...c, bas: c.prix, article: c.titre }))) {
       if (vus.has(p.lien) || marqueLogo.test(`${p.article} ${r.titre}`)) continue;
       vus.add(p.lien);
       // achat max = même règle que les opportunités (≥ 40 % de marge), sur le prix de CETTE annonce
@@ -628,8 +619,8 @@ function afficherAchat() {
       <a class="chine-btn" href="${esc(e.p.lien)}" target="_blank" rel="noopener">🛒 Voir l'article sur AliExpress</a>
     </div>`;
   if (!l.length) {
-    $("#liste-achat").innerHTML = `<div class="vide">⏳ Pas encore de prix AliExpress : l'extension du PC les relève
-      toutes les 6 h (PC allumé, Chrome ouvert).</div>`;
+    $("#liste-achat").innerHTML = `<div class="vide">⏳ Pas encore de produits vérifiés par Gemini : l'extension du PC
+      les relève toutes les 6 h (PC allumé, Chrome ouvert).</div>`;
   } else if (!bons.length) {
     $("#liste-achat").innerHTML = `<div class="vide">❄️ <b>Rien de rentable pour l'instant</b> (${l.length} articles
       comparés, ${quand(PRIX_CHINE.date / 1000)}). N'achète rien : la liste se remplit seule dès qu'un article passe.<br>
